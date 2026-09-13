@@ -1,9 +1,14 @@
-# POCO X7 Pro baseline profile
+# POCO X7 Pro / Mali-G720 profile
 
 Hardware target: Dimensity 8400-Ultra (`MT6899`) with Mali-G720 MC7 and 12 GB
 RAM.
 
-Start comparison runs in Pokémon Sword at the same saved location, after the
+V1 starts a fresh installation with three pipeline workers, asynchronous GPU
+emulation and asynchronous shaders enabled. Those settings are user-editable:
+if a game has visual issues or crashes, turn off asynchronous GPU emulation
+first, then asynchronous shaders, before changing other accuracy settings.
+
+Compare configurations in Pokémon Sword at the same saved location, after the
 device has reached a stable temperature. Record one result per configuration:
 
 | Variant | GPU async emulation | Pipeline workers | Purpose |
@@ -15,5 +20,5 @@ device has reached a stable temperature. Record one result per configuration:
 Use the platform's stock Mali driver. Do not apply settings intended for
 Adreno/Turnip, such as Qualcomm-specific vertex-buffer or bloom workarounds.
 
-V0 does not force these settings into the APK: settings remain user-controlled
-until each one has been measured for stability.
+V0 did not alter any defaults. V1 is a starting profile only; it does not
+replace the stock Mali driver or apply Qualcomm/Turnip workarounds.

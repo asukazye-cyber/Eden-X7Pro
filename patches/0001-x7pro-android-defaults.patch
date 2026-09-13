@@ -1,0 +1,29 @@
+diff --git a/src/android/app/src/main/jni/android_settings.h b/src/android/app/src/main/jni/android_settings.h
+--- a/src/android/app/src/main/jni/android_settings.h
++++ b/src/android/app/src/main/jni/android_settings.h
+@@ -150,5 +150,8 @@
+-        Settings::SwitchableSetting<s32> pipeline_worker_count{linkage, 2, "pipeline_worker_count",
++        // Eden-X7Pro V1: three workers are a balanced first-run preset for
++        // the Dimensity 8400-Ultra. The Android settings screen still lets
++        // the user choose any supported value from 2 through 8.
++        Settings::SwitchableSetting<s32> pipeline_worker_count{linkage, 3, "pipeline_worker_count",
+                                  Settings::Category::Android,
+                                  Settings::Specialization::Default,
+                                  true,
+                                  true};
+diff --git a/src/common/settings.h b/src/common/settings.h
+--- a/src/common/settings.h
++++ b/src/common/settings.h
+@@ -478,7 +478,7 @@ struct Values {
+     SwitchableSetting<bool> use_asynchronous_gpu_emulation{linkage,
+ #ifdef __ANDROID__
+-        false,
++        true,
+ #else
+         true,
+ #endif
+         "use_asynchronous_gpu_emulation", Category::Renderer};
+@@ -669,2 +669,2 @@
+-    SwitchableSetting<bool> use_asynchronous_shaders{linkage, false, "use_asynchronous_shaders",
++    SwitchableSetting<bool> use_asynchronous_shaders{linkage, true, "use_asynchronous_shaders",
+                                                      Category::RendererHacks};
