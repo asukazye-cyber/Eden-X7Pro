@@ -1,0 +1,7 @@
+# Local build material and downloaded CI artifacts
+eden/
+dist/
+*.apk
+*.aab
+.gradle/
+build/
