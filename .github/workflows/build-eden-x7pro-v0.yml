@@ -40,7 +40,12 @@ jobs:
             "build-tools;35.0.0" \
             "cmake;3.22.1" \
             "ndk;27.2.12479018"
+          # sdkmanager closes its input after it accepts every license. With
+          # pipefail enabled that makes `yes` report a broken pipe and masks
+          # the successful sdkmanager exit status.
+          set +o pipefail
           yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
 
       - name: Install native build prerequisites
         shell: bash
