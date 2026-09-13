@@ -13,7 +13,7 @@ if [[ ! -d "$eden_dir/src/android" || ! -x "$eden_dir/.ci/android/build.sh" ]]; 
   exit 1
 fi
 
-if [[ ! -x "$v1_script" || ! -f "$patch_file" ]]; then
+if [[ ! -f "$v1_script" || ! -f "$patch_file" ]]; then
   echo "The X7Pro V2 build files are incomplete." >&2
   exit 1
 fi
