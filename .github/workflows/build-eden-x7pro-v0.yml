@@ -61,7 +61,7 @@ jobs:
 
       - name: Apply the conservative X7Pro V0 baseline
         shell: bash
-        run: scripts/apply_x7pro_v0.sh "$GITHUB_WORKSPACE/eden"
+        run: bash scripts/apply_x7pro_v0.sh "$GITHUB_WORKSPACE/eden"
 
       - name: Build optimized Android APK
         shell: bash
