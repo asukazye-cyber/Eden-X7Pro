@@ -6,9 +6,9 @@ source-reviewed Android preset while preserving Eden's normal settings UI.
 
 ## Build
 
-Run **Build Eden X7Pro V1** from the repository's Actions tab. The workflow
+Run **Build Eden X7Pro V2 Experimental** from the repository's Actions tab. The workflow
 clones `eden-emulator/mirror` with submodules, installs the Android NDK 27.2,
-CMake 3.22.1 and Java 17, applies the V1 patch, then invokes Eden's supported
+CMake 3.22.1 and Java 17, applies the V2 patches, then invokes Eden's supported
 Android build script. The produced APK is retained as an Actions artifact for
 30 days.
 
@@ -19,10 +19,20 @@ Android build script. The produced APK is retained as an Actions artifact for
   - 3 Vulkan pipeline workers;
   - asynchronous GPU emulation enabled;
   - asynchronous shader compilation enabled.
+- **V2 Experimental:** V1 plus asynchronous presentation for fresh installs,
+  and a renderer change gated to a proprietary ARM **Mali-G720** driver. When
+  `VK_EXT_descriptor_buffer` and buffer-device address support are exposed, V2
+  uses a 3 MiB per-frame descriptor-ring budget instead of Eden's generic 2 MiB
+  mobile-tiler budget. Across eight frames in flight this reserves at most an
+  additional 8 MiB of host-visible memory and can avoid a descriptor-ring
+  exhaustion stall in descriptor-heavy scenes. It has no effect on drivers that
+  do not expose that path.
 
-V1 does not install or replace a GPU driver, and every changed setting remains
-visible and reversible in Eden's Android settings. It is an initial performance
-profile, not a promise of a particular frame rate or graphics compatibility.
+V2 does not install or replace a GPU driver, raise clocks, or disable Eden's
+ARM synchronization safeguards. Every changed setting remains visible and
+reversible in Eden's Android settings. It is an experimental renderer profile,
+not a promise of a particular frame rate or graphics compatibility. Test it at
+1x first, then use 1.25x only if the same demanding scene remains stable.
 
 No game files, keys, firmware, saves, mods or proprietary content belong in
 this repository.

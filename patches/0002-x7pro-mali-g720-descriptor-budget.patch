@@ -1,0 +1,55 @@
+diff --git a/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp b/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp
+--- a/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp
++++ b/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp
+@@ -2,6 +2,7 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ 
+ #include <algorithm>
++#include <string_view>
+ 
+ #include "common/alignment.h"
+ #include "common/assert.h"
+@@ -25,8 +26,21 @@ DescriptorBufferRing::DescriptorBufferRing(const Device& device_,
+                                              props.maxResourceDescriptorBufferRange,
+                                              props.samplerDescriptorBufferAddressSpaceSize,
+                                              props.resourceDescriptorBufferAddressSpaceSize,
+                                              props.descriptorBufferAddressSpaceSize})};
+-    const VkDeviceSize frame_size{device.IsTiler() ? TILER_FRAME_SIZE : DESKTOP_FRAME_SIZE};
++
++    // The G720 has enough shared memory for a slightly larger descriptor ring. Keeping this
++    // limited to the proprietary ARM G720 path avoids changing the generic mobile tiler policy.
++    // A larger ring reduces the chance of a CPU-side Scheduler::Finish() when descriptor-heavy
++    // scenes exhaust the generic 2 MiB tiler budget.
++    const bool is_mali_g720{device.GetDriverID() == VK_DRIVER_ID_ARM_PROPRIETARY &&
++                            device.GetModelName().find("Mali-G720") != std::string_view::npos};
++    const VkDeviceSize frame_size{is_mali_g720   ? MALI_G720_FRAME_SIZE
++                                  : device.IsTiler() ? TILER_FRAME_SIZE
++                                                     : DESKTOP_FRAME_SIZE};
++    if (is_mali_g720) {
++        LOG_INFO(Render_Vulkan, "Mali-G720 descriptor ring budget: {} MiB",
++                 MALI_G720_FRAME_SIZE / (1024 * 1024));
++    }
+     const VkDeviceSize chunk_size{
+         Common::AlignDown((std::min)(frame_size, max_bound), alignment)};
+     if (chunk_size <= alignment) {
+diff --git a/src/video_core/renderer_vulkan/vk_descriptor_buffer.h b/src/video_core/renderer_vulkan/vk_descriptor_buffer.h
+--- a/src/video_core/renderer_vulkan/vk_descriptor_buffer.h
++++ b/src/video_core/renderer_vulkan/vk_descriptor_buffer.h
+@@ -20,5 +20,6 @@ class DescriptorBufferRing final {
+     static constexpr size_t FRAMES_IN_FLIGHT = 8;
+     static constexpr VkDeviceSize TILER_FRAME_SIZE = 2 * 1024 * 1024;
++    static constexpr VkDeviceSize MALI_G720_FRAME_SIZE = 3 * 1024 * 1024;
+     static constexpr VkDeviceSize DESKTOP_FRAME_SIZE = 4 * 1024 * 1024;
+ 
+ public:
+diff --git a/src/common/settings.h b/src/common/settings.h
+--- a/src/common/settings.h
++++ b/src/common/settings.h
+@@ -645,6 +645,6 @@ struct Values {
+     SwitchableSetting<bool> async_presentation{linkage,
+ #ifdef __ANDROID__
+-                                               false,
++                                               true,
+ #else
+                                                false,
+ #endif

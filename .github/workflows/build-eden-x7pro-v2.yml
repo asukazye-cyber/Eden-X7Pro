@@ -1,0 +1,86 @@
+name: Build Eden X7Pro V2 Experimental
+
+on:
+  workflow_dispatch:
+    inputs:
+      eden_ref:
+        description: Eden mirror ref to build
+        required: true
+        default: master
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android Mali-G720 experimental preset
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out the X7Pro build files
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build components
+        shell: bash
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmake;3.22.1" \
+            "ndk;27.2.12479018"
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+
+      - name: Install native build prerequisites
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ccache clang glslang-tools lld ninja-build pkg-config
+
+      - name: Fetch Eden and its submodules
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "${{ inputs.eden_ref }}" --recurse-submodules \
+            https://github.com/eden-emulator/mirror.git eden
+
+      - name: Apply the X7Pro V2 source preset
+        shell: bash
+        run: bash scripts/apply_x7pro_v2.sh "$GITHUB_WORKSPACE/eden"
+
+      - name: Build optimized Android APK
+        shell: bash
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+          CCACHE: 'true'
+        run: |
+          cd eden
+          .ci/android/build.sh --release --target optimized --build-type Release
+
+      - name: Package build output
+        shell: bash
+        run: |
+          mkdir -p dist
+          find eden/artifacts -type f \( -name '*.apk' -o -name '*.aab' \) -print -exec cp {} dist/ \;
+          test -n "$(find dist -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
+      - name: Upload Eden X7Pro V2 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Eden-X7Pro-V2-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
