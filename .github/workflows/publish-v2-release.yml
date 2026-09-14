@@ -1,0 +1,54 @@
+name: Publish Eden X7Pro V2 APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful V2 build run that produced the APK artifact
+        required: true
+        default: '34789972081'
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    name: Publish the verified V2 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Download the selected V2 artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          artifact_id="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name | startswith("Eden-X7Pro-V2-")) | .id' \
+            | head -n 1)"
+          test -n "$artifact_id"
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            > artifact.zip
+          mkdir -p dist
+          unzip -q artifact.zip -d dist
+          apk_path="$(find dist -type f -name '*.apk' -print -quit)"
+          test -n "$apk_path"
+          cp "$apk_path" Eden-X7Pro-V2.apk
+
+      - name: Create the V2 prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.2.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Eden X7Pro V2 Experimental" \
+            --prerelease \
+            Eden-X7Pro-V2.apk

@@ -10,7 +10,8 @@ Run **Build Eden X7Pro V2 Experimental** from the repository's Actions tab. The 
 clones `eden-emulator/mirror` with submodules, installs the Android NDK 27.2,
 CMake 3.22.1 and Java 17, applies the V2 patches, then invokes Eden's supported
 Android build script. The produced APK is retained as an Actions artifact for
-30 days.
+30 days. After a successful V2 build, **Publish Eden X7Pro V2 APK** turns that
+verified artifact into the `v0.2.0` prerelease, with a direct APK download.
 
 ## Versions
 
