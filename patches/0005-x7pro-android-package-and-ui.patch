@@ -1,0 +1,321 @@
+diff --git a/src/android/app/build.gradle.kts b/src/android/app/build.gradle.kts
+index 3ae6d73..95cdea1 100644
+--- a/src/android/app/build.gradle.kts
++++ b/src/android/app/build.gradle.kts
+@@ -216,6 +216,29 @@ android {
+             }
+         }
+ 
++        // Standalone package for the POCO X7 Pro. Its native code is deliberately distinct from
++        // the regular Eden and Lossless.dll frame-generation variants.
++        create("maliX7Pro") {
++            dimension = "version"
++            minSdk = 33
++            manifestPlaceholders += mapOf("appNameBase" to "Eden Mali X7 Pro")
++            resValue("string", "app_name_suffixed", "Eden Mali X7 Pro")
++            applicationId = "org.eden.mali.x7pro"
++
++            externalNativeBuild {
++                cmake {
++                    arguments.addAll(listOf(
++                        "-DENABLE_LSFG=OFF",
++                        "-DENABLE_MALI_X7PRO_FG=ON",
++                    ))
++                }
++            }
++
++            ndk {
++                abiFilters += listOf("arm64-v8a")
++            }
++        }
++
+         create("legacy") {
+             dimension = "version"
+             minSdk = 29
+diff --git a/src/android/app/src/main/AndroidManifest.xml b/src/android/app/src/main/AndroidManifest.xml
+index b899ca0..964ca2d 100644
+--- a/src/android/app/src/main/AndroidManifest.xml
++++ b/src/android/app/src/main/AndroidManifest.xml
+@@ -96,7 +96,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
+                 <data android:mimeType="application/octet-stream" android:scheme="content"/>
+             </intent-filter>
+             <intent-filter>
+-                <action android:name="dev.eden.eden_emulator.LAUNCH_WITH_CUSTOM_CONFIG" />
++                <action android:name="${applicationId}.LAUNCH_WITH_CUSTOM_CONFIG" />
+                 <category android:name="android.intent.category.DEFAULT" />
+             </intent-filter>
+             <meta-data android:name="android.nfc.action.TECH_DISCOVERED" android:resource="@xml/nfc_tech_filter" />
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt
+index 7722288..2d9e295 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt
+@@ -217,6 +217,9 @@ object NativeLibrary {
+      */
+     external fun getGpuDriver(): String
+ 
++    /** Human-readable diagnostics for the self-contained Mali compute frame generator. */
++    external fun getMaliNativeFrameGenDiagnostics(): String
++
+     external fun applySettings()
+ 
+     external fun logSettings()
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt
+index 5eaaaae..645d7df 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt
+@@ -41,6 +41,8 @@ enum class BooleanSetting(override val key: String) : AbstractBooleanSetting {
+     RENDERER_FRAME_GEN_FP16("frame_gen_fp16"),
+     RENDERER_FRAME_GEN_FLOW_SCALE_AUTO("frame_gen_flow_scale_auto"),
+     RENDERER_FRAME_GEN_DUMP_FLOW("frame_gen_dump_flow"),
++    RENDERER_MALI_NATIVE_FRAME_GEN("mali_native_frame_gen"),
++    RENDERER_MALI_NATIVE_FRAME_GEN_DEBUG_OVERLAY("mali_native_frame_gen_debug_overlay"),
+     GPU_UNSWIZZLE_ENABLED("gpu_unswizzle_enabled"),
+     PICTURE_IN_PICTURE("picture_in_picture"),
+     USE_CUSTOM_RTC("custom_rtc_enabled"),
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
+index ea31692..f41d2d2 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
+@@ -23,6 +23,8 @@ enum class IntSetting(override val key: String) : AbstractIntSetting {
+     RENDERER_FRAME_GEN_TARGET_RATE("frame_gen_target_rate"),
+     RENDERER_FRAME_GEN_QUEUE_TARGET("frame_gen_queue_target"),
+     RENDERER_FRAME_GEN_FLOW_SCALE("frame_gen_flow_scale"),
++    RENDERER_MALI_NATIVE_FRAME_GEN_MODE("mali_native_frame_gen_mode"),
++    RENDERER_MALI_NATIVE_FRAME_GEN_TARGET("mali_native_frame_gen_target"),
+     RENDERER_VSYNC("use_vsync"),
+     RENDERER_SCALING_FILTER("scaling_filter"),
+     RENDERER_ANTI_ALIASING("anti_aliasing"),
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
+index 89e0084..70df848 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
+@@ -6,6 +6,7 @@ package org.yuzu.yuzu_emu.features.settings.ui
+ import android.annotation.SuppressLint
+ import android.os.Build
+ import android.widget.Toast
++import org.yuzu.yuzu_emu.BuildConfig
+ import org.yuzu.yuzu_emu.NativeLibrary
+ import org.yuzu.yuzu_emu.R
+ import org.yuzu.yuzu_emu.YuzuApplication
+@@ -89,6 +90,10 @@ class SettingsFragmentPresenter(
+     }
+ 
+     private fun addFrameGenSettings(sl: ArrayList<SettingsItem>) {
++        if (BuildConfig.APPLICATION_ID == "org.eden.mali.x7pro") {
++            addMaliNativeFrameGenSettings(sl)
++            return
++        }
+         sl.apply {
+             if (!LosslessScalingHelper.isSupportedByGpu()) {
+                 add(
+@@ -128,6 +133,43 @@ class SettingsFragmentPresenter(
+         }
+     }
+ 
++    private fun addMaliNativeFrameGenSettings(sl: ArrayList<SettingsItem>) {
++        sl.apply {
++            add(
++                SwitchSetting(
++                    BooleanSetting.RENDERER_MALI_NATIVE_FRAME_GEN,
++                    titleId = R.string.mali_native_frame_gen,
++                    descriptionId = R.string.mali_native_frame_gen_description
++                )
++            )
++            add(
++                SingleChoiceSetting(
++                    IntSetting.RENDERER_MALI_NATIVE_FRAME_GEN_MODE,
++                    titleId = R.string.mali_native_frame_gen_mode,
++                    descriptionId = R.string.mali_native_frame_gen_mode_description,
++                    choicesId = R.array.maliNativeFrameGenModeNames,
++                    valuesId = R.array.maliNativeFrameGenModeValues
++                )
++            )
++            add(
++                SingleChoiceSetting(
++                    IntSetting.RENDERER_MALI_NATIVE_FRAME_GEN_TARGET,
++                    titleId = R.string.mali_native_frame_gen_target,
++                    descriptionId = R.string.mali_native_frame_gen_target_description,
++                    choicesId = R.array.maliNativeFrameGenTargetNames,
++                    valuesId = R.array.maliNativeFrameGenTargetValues
++                )
++            )
++            add(
++                SwitchSetting(
++                    BooleanSetting.RENDERER_MALI_NATIVE_FRAME_GEN_DEBUG_OVERLAY,
++                    titleId = R.string.mali_native_frame_gen_debug_overlay,
++                    descriptionId = R.string.mali_native_frame_gen_debug_overlay_description
++                )
++            )
++        }
++    }
++
+     private fun isSharpnessScalingFilterSelected(): Boolean {
+         val needsGlobal = getNeedsGlobalForKey(IntSetting.RENDERER_SCALING_FILTER.key)
+         val selectedFilter = IntSetting.RENDERER_SCALING_FILTER.getInt(needsGlobal)
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt
+index 3f1f3da..14b6136 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt
+@@ -66,6 +66,7 @@ import kotlinx.coroutines.ensureActive
+ import kotlinx.coroutines.launch
+ import kotlinx.coroutines.withContext
+ import org.yuzu.yuzu_emu.HomeNavigationDirections
++import org.yuzu.yuzu_emu.BuildConfig
+ import org.yuzu.yuzu_emu.NativeLibrary
+ import org.yuzu.yuzu_emu.R
+ import org.yuzu.yuzu_emu.activities.EmulationActivity
+@@ -1517,7 +1518,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
+ 
+     @SuppressLint("DefaultLocale")
+     private fun updateShowStatsOverlay() {
+-        val showPerfOverlay = BooleanSetting.SHOW_PERFORMANCE_OVERLAY.getBoolean()
++        val showMaliDiagnostics = BuildConfig.APPLICATION_ID == "org.eden.mali.x7pro" &&
++            BooleanSetting.RENDERER_MALI_NATIVE_FRAME_GEN_DEBUG_OVERLAY.getBoolean()
++        val showPerfOverlay = BooleanSetting.SHOW_PERFORMANCE_OVERLAY.getBoolean() || showMaliDiagnostics
+         binding.showStatsOverlayText.apply {
+             setTextColor(
+                 MaterialColors.getColor(
+@@ -1543,8 +1546,13 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
+                     val perfStats = NativeLibrary.getPerfStats()
+                     val actualFps = perfStats[FPS]
+ 
++                    if (showMaliDiagnostics) {
++                        sb.append(NativeLibrary.getMaliNativeFrameGenDiagnostics())
++                    }
++
+                     if (BooleanSetting.SHOW_FPS.getBoolean(needsGlobal)) {
+                         var fpsText = String.format("FPS: %.1f", actualFps)
++                        if (sb.isNotEmpty()) sb.append(" | ")
+                         sb.append(fpsText)
+                     }
+ 
+diff --git a/src/android/app/src/main/jni/emu_window/emu_window.cpp b/src/android/app/src/main/jni/emu_window/emu_window.cpp
+index 8dfea40..e4f50f9 100644
+--- a/src/android/app/src/main/jni/emu_window/emu_window.cpp
++++ b/src/android/app/src/main/jni/emu_window/emu_window.cpp
+@@ -125,6 +125,13 @@ float EmuWindow_Android::GetFrameTimeVerifiedHint() const {
+ }
+ 
+ float EmuWindow_Android::GetPresentedFrameMultiplier() {
++#ifdef HAS_MALI_X7PRO_FG
++    // The native Mali path produces exactly one motion-compensated intermediate per source frame.
++    // Report that to Android's display-rate hint without involving the optional LSFG DLL path.
++    if (Settings::values.mali_native_frame_gen.GetValue()) {
++        return 2.0f;
++    }
++#endif
+     if (!Settings::values.frame_gen.GetValue()) {
+         return 1.0f;
+     }
+@@ -181,7 +188,17 @@ void EmuWindow_Android::UpdateFrameRateHint() {
+     }
+ 
+     const auto now = Clock::now();
+-    const float frame_rate_hint = GetFrameRateHint();
++    float frame_rate_hint = GetFrameRateHint();
++#ifdef HAS_MALI_X7PRO_FG
++    // This is a display pacing request only. It deliberately never changes emulation speed or
++    // fabricates source frames when the renderer has disabled native generation.
++    if (Settings::values.mali_native_frame_gen.GetValue()) {
++        const u32 target = Settings::values.mali_native_frame_gen_target.GetValue();
++        if (target != 0) {
++            frame_rate_hint = std::min(frame_rate_hint, static_cast<float>(target));
++        }
++    }
++#endif
+     if (std::fabs(frame_rate_hint - m_last_frame_rate_hint) < 0.01f) {
+         m_pending_frame_rate_hint = frame_rate_hint;
+         m_pending_frame_rate_hint_votes = 0;
+diff --git a/src/android/app/src/main/jni/native.cpp b/src/android/app/src/main/jni/native.cpp
+index 423edc2..1f29516 100644
+--- a/src/android/app/src/main/jni/native.cpp
++++ b/src/android/app/src/main/jni/native.cpp
+@@ -43,6 +43,9 @@ extern "C" {
+ #include "common/android/multiplayer/multiplayer.h"
+ #include "common/android/android_common.h"
+ #include "common/android/id_cache.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/poco_x7pro_profile.h"
++#endif
+ #include "common/dynamic_library.h"
+ #include "common/fs/fs_util.h"
+ #include "common/fs/path_util.h"
+@@ -1028,6 +1031,15 @@ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getGpuDriver(JNIEnv* env, jobject
+         env, EmulationSession::GetInstance().System().GPU().Renderer().GetDeviceVendor());
+ }
+ 
++jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getMaliNativeFrameGenDiagnostics(JNIEnv* env,
++                                                                                  jobject jobj) {
++#ifdef HAS_MALI_X7PRO_FG
++    return Common::Android::ToJString(env, Common::Android::PocoX7ProFrameGenDiagnostics());
++#else
++    return Common::Android::ToJString(env, "");
++#endif
++}
++
+ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getCpuSummary(JNIEnv* env, jobject /*jobj*/) {
+     get_arm_cpu_name();
+     constexpr const char* CPUINFO_PATH = "/proc/cpuinfo";
+diff --git a/src/android/app/src/main/res/values/arrays.xml b/src/android/app/src/main/res/values/arrays.xml
+index 931cf2b..fb5d16c 100644
+--- a/src/android/app/src/main/res/values/arrays.xml
++++ b/src/android/app/src/main/res/values/arrays.xml
+@@ -199,6 +199,32 @@
+         <item>2</item>
+     </integer-array>
+ 
++    <string-array name="maliNativeFrameGenModeNames">
++        <item>@string/mali_native_frame_gen_mode_performance</item>
++        <item>@string/mali_native_frame_gen_mode_balanced</item>
++        <item>@string/mali_native_frame_gen_mode_quality</item>
++        <item>@string/mali_native_frame_gen_mode_adaptive</item>
++    </string-array>
++
++    <integer-array name="maliNativeFrameGenModeValues">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++        <item>3</item>
++    </integer-array>
++
++    <string-array name="maliNativeFrameGenTargetNames">
++        <item>@string/mali_native_frame_gen_target_auto</item>
++        <item>@string/mali_native_frame_gen_target_40</item>
++        <item>@string/mali_native_frame_gen_target_60</item>
++    </string-array>
++
++    <integer-array name="maliNativeFrameGenTargetValues">
++        <item>0</item>
++        <item>40</item>
++        <item>60</item>
++    </integer-array>
++
+     <string-array name="rendererVSyncNames">
+         <item>@string/renderer_vsync_immediate</item>
+         <item>@string/renderer_vsync_mailbox</item>
+diff --git a/src/android/app/src/main/res/values/strings.xml b/src/android/app/src/main/res/values/strings.xml
+index ca7263e..910955d 100644
+--- a/src/android/app/src/main/res/values/strings.xml
++++ b/src/android/app/src/main/res/values/strings.xml
+@@ -320,6 +320,21 @@
+     <string name="frame_gen">Frame generation</string>
+     <string name="frame_gen_per_game_description">Configure frame generation for this game</string>
+     <string name="frame_gen_description">Insert interpolated frames between rendered ones using Lossless Scaling. Forces FIFO presentation while enabled.</string>
++    <string name="mali_native_frame_gen">Mali Native Frame Generation (Experimental)</string>
++    <string name="mali_native_frame_gen_description">Uses the POCO X7 Pro Vulkan compute path to estimate motion between two GPU-resident frames and generate one midpoint frame. It never requires Lossless.dll.</string>
++    <string name="mali_native_frame_gen_mode">Mode</string>
++    <string name="mali_native_frame_gen_mode_description">Performance uses a smaller motion search; Balanced is the POCO X7 Pro default; Quality spends more GPU time on motion estimation; Adaptive currently starts from the Balanced safety profile.</string>
++    <string name="mali_native_frame_gen_mode_performance">Performance</string>
++    <string name="mali_native_frame_gen_mode_balanced">Balanced</string>
++    <string name="mali_native_frame_gen_mode_quality">Quality</string>
++    <string name="mali_native_frame_gen_mode_adaptive">Adaptive</string>
++    <string name="mali_native_frame_gen_target">Target output rate</string>
++    <string name="mali_native_frame_gen_target_description">The visual target for the experimental pacing policy. The emulator never changes the game’s actual emulation speed.</string>
++    <string name="mali_native_frame_gen_target_auto">Auto</string>
++    <string name="mali_native_frame_gen_target_40">40 FPS</string>
++    <string name="mali_native_frame_gen_target_60">60 FPS</string>
++    <string name="mali_native_frame_gen_debug_overlay">Mali FG debug overlay</string>
++    <string name="mali_native_frame_gen_debug_overlay_description">Shows profile state plus real/generated frame counters in the performance overlay and emits periodic [MALI-FG] log entries.</string>
+     <string name="frame_gen_multiplier">Frame multiplier</string>
+     <string name="frame_gen_multiplier_description">How many frames to display for each rendered frame. Higher values cost proportionally more GPU time. Asking for more than your display can present will slow emulation down.</string>
+     <string name="frame_gen_multiplier_2x">2x</string>

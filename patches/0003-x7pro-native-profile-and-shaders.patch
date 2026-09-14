@@ -1,0 +1,565 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f5c360b..7482cfa 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -85,6 +85,11 @@ option(ENABLE_WERROR "Enable -Werror diagnostics" ON)
+ # Lossless Scaling frame generation. Only Android.
+ cmake_dependent_option(ENABLE_LSFG "Enable Lossless Scaling frame generation" ON "ANDROID" OFF)
+ 
++# Self-contained Vulkan compute frame generation for the POCO X7 Pro profile. This is a
++# separate code path from LSFG: it ships its own shaders and deliberately has no dependency on
++# a user-provided DLL, Vulkan memory model, or VK_EXT_robustness2.
++cmake_dependent_option(ENABLE_MALI_X7PRO_FG "Enable Mali-G720 native frame generation" OFF "ANDROID" OFF)
++
+ option(ENABLE_RESHADE "Enable ReShade FX post-processing effects" ON)
+ 
+ # non-linux bundled qt are static
+diff --git a/src/common/CMakeLists.txt b/src/common/CMakeLists.txt
+index 61e0e64..fcd04ff 100644
+--- a/src/common/CMakeLists.txt
++++ b/src/common/CMakeLists.txt
+@@ -166,6 +166,8 @@ if(ANDROID)
+         fs/fs_android.h
+         android/android_common.cpp
+         android/android_common.h
++        android/poco_x7pro_profile.cpp
++        android/poco_x7pro_profile.h
+         android/id_cache.cpp
+         android/id_cache.h
+         android/multiplayer/multiplayer.cpp
+diff --git a/src/common/android/poco_x7pro_profile.cpp b/src/common/android/poco_x7pro_profile.cpp
+new file mode 100644
+index 0000000..804a632
+--- /dev/null
++++ b/src/common/android/poco_x7pro_profile.cpp
+@@ -0,0 +1,168 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#include <algorithm>
++#include <cctype>
++#include <mutex>
++#include <string>
++
++#include <sys/system_properties.h>
++#include <vulkan/vulkan_core.h>
++
++#include "common/android/poco_x7pro_profile.h"
++#include "common/logging.h"
++#include "common/thread.h"
++
++namespace Common::Android {
++namespace {
++
++struct ProfileState {
++    std::once_flag device_once;
++    std::mutex mutex;
++    bool poco_x7_pro{};
++    bool mali_g720{};
++    bool logged{};
++    std::string status{"device-not-detected"};
++    std::string frame_gen_phase{"inactive"};
++    u64 real_frames{};
++    u64 generated_frames{};
++};
++
++ProfileState& State() {
++    static ProfileState state;
++    return state;
++}
++
++std::string Property(const char* key) {
++    char value[PROP_VALUE_MAX]{};
++    return __system_property_get(key, value) > 0 ? value : "";
++}
++
++std::string Lower(std::string value) {
++    std::ranges::transform(value, value.begin(), [](unsigned char c) {
++        return static_cast<char>(std::tolower(c));
++    });
++    return value;
++}
++
++bool Has(const std::string& value, std::string_view needle) {
++    return value.find(needle) != std::string::npos;
++}
++
++const char* RoleName(PocoX7ProThreadRole role) {
++    switch (role) {
++    case PocoX7ProThreadRole::GpuSubmission:
++        return "GpuSubmission";
++    case PocoX7ProThreadRole::RendererCritical:
++        return "RendererCritical";
++    case PocoX7ProThreadRole::CpuEmulation:
++        return "CpuEmulation";
++    case PocoX7ProThreadRole::ShaderCompiler:
++        return "ShaderCompiler";
++    case PocoX7ProThreadRole::AsyncWorker:
++        return "AsyncWorker";
++    case PocoX7ProThreadRole::Background:
++        return "Background";
++    }
++    return "Unknown";
++}
++
++} // Anonymous namespace
++
++void DetectPocoX7ProDevice() {
++    auto& state = State();
++    std::call_once(state.device_once, [&] {
++        const std::string soc = Lower(Property("ro.soc.model") + " " +
++                                      Property("ro.board.platform") + " " +
++                                      Property("ro.mediatek.platform"));
++        const std::string product = Lower(Property("ro.product.manufacturer") + " " +
++                                          Property("ro.product.brand") + " " +
++                                          Property("ro.product.model") + " " +
++                                          Property("ro.product.device"));
++
++        const bool mt6899 = Has(soc, "mt6899") || Has(soc, "dimensity 8400");
++        const bool poco_x7 = Has(product, "poco x7 pro") || Has(product, "x7 pro");
++        const bool xiaomi = Has(product, "xiaomi") || Has(product, "poco") || Has(product, "redmi");
++
++        std::scoped_lock lock{state.mutex};
++        state.poco_x7_pro = mt6899 && poco_x7 && xiaomi;
++        state.status = state.poco_x7_pro ? "waiting-for-mali-g720" : "device-mismatch";
++        LOG_INFO(Common, "[MALI-FG] device profile: soc='{}' product='{}' result={}", soc, product,
++                 state.status);
++    });
++}
++
++void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view model_name,
++                                 u32 api_version, u32 driver_version) {
++    DetectPocoX7ProDevice();
++    auto& state = State();
++    const std::string driver = Lower(std::string{driver_name});
++    const std::string model = Lower(std::string{model_name});
++    const bool mali_g720 = Has(model, "mali-g720") && (Has(driver, "arm") || !driver.empty());
++
++    std::scoped_lock lock{state.mutex};
++    state.mali_g720 = mali_g720;
++    state.status = state.poco_x7_pro && state.mali_g720 ? "active" : "gpu-mismatch";
++    if (!state.logged) {
++        LOG_INFO(Common,
++                 "[MALI-FG] GPU detected: '{}' driver='{}' api={}.{}.{} driver_version={} profile={}",
++                 model_name, driver_name, VK_VERSION_MAJOR(api_version), VK_VERSION_MINOR(api_version),
++                 VK_VERSION_PATCH(api_version), driver_version, state.status);
++        state.logged = true;
++    }
++}
++
++void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64 real_frames, u64 generated_frames) {
++    auto& state = State();
++    std::scoped_lock lock{state.mutex};
++    state.frame_gen_phase = phase;
++    state.real_frames = real_frames;
++    state.generated_frames = generated_frames;
++}
++
++bool IsPocoX7ProProfileActive() {
++    DetectPocoX7ProDevice();
++    auto& state = State();
++    std::scoped_lock lock{state.mutex};
++    return state.poco_x7_pro && state.mali_g720;
++}
++
++std::string PocoX7ProProfileStatus() {
++    DetectPocoX7ProDevice();
++    auto& state = State();
++    std::scoped_lock lock{state.mutex};
++    return state.status;
++}
++
++std::string PocoX7ProFrameGenDiagnostics() {
++    DetectPocoX7ProDevice();
++    auto& state = State();
++    std::scoped_lock lock{state.mutex};
++    return "Mali FG: " + state.frame_gen_phase + " | profile=" + state.status +
++           " | real=" + std::to_string(state.real_frames) +
++           " | generated=" + std::to_string(state.generated_frames);
++}
++
++void ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole role) {
++    if (!IsPocoX7ProProfileActive()) {
++        return;
++    }
++
++    LOG_DEBUG(Common, "[MALI-FG] applying topology-aware affinity role={}", RoleName(role));
++    switch (role) {
++    case PocoX7ProThreadRole::GpuSubmission:
++    case PocoX7ProThreadRole::RendererCritical:
++    case PocoX7ProThreadRole::CpuEmulation:
++        SetCurrentThreadToPerformanceCores();
++        break;
++    case PocoX7ProThreadRole::ShaderCompiler:
++    case PocoX7ProThreadRole::AsyncWorker:
++        SetCurrentThreadToEfficiencyCores();
++        break;
++    case PocoX7ProThreadRole::Background:
++        SetCurrentThreadToBackgroundWork();
++        break;
++    }
++}
++
++} // namespace Common::Android
+diff --git a/src/common/android/poco_x7pro_profile.h b/src/common/android/poco_x7pro_profile.h
+new file mode 100644
+index 0000000..26ba190
+--- /dev/null
++++ b/src/common/android/poco_x7pro_profile.h
+@@ -0,0 +1,37 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <string>
++#include <string_view>
++
++#include "common/common_types.h"
++
++namespace Common::Android {
++
++// Roles deliberately describe work, not CPU numbers. The Android topology implementation reads
++// cpu_capacity/cpufreq and applies the matching mask only when the kernel exposes a safe split.
++enum class PocoX7ProThreadRole {
++    GpuSubmission,
++    RendererCritical,
++    CpuEmulation,
++    ShaderCompiler,
++    AsyncWorker,
++    Background,
++};
++
++void DetectPocoX7ProDevice();
++void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view model_name,
++                                 u32 api_version, u32 driver_version);
++void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64 real_frames, u64 generated_frames);
++
++[[nodiscard]] bool IsPocoX7ProProfileActive();
++[[nodiscard]] std::string PocoX7ProProfileStatus();
++[[nodiscard]] std::string PocoX7ProFrameGenDiagnostics();
++
++// Safe no-op for every device other than a recognised POCO X7 Pro / MT6899 / Mali-G720. Affinity
++// errors are logged by the central thread policy implementation and never make emulation fail.
++void ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole role);
++
++} // namespace Common::Android
+diff --git a/src/common/settings.h b/src/common/settings.h
+index 6b60d63..8a3e173 100644
+--- a/src/common/settings.h
++++ b/src/common/settings.h
+@@ -475,6 +475,38 @@ struct Values {
+     SwitchableSetting<bool> frame_gen_dump_flow{linkage, false, "frame_gen_dump_flow",
+                                                 Category::Renderer};
+ 
++    // Self-contained compute frame generation used only by the Mali X7 Pro Android flavor. The
++    // renderer performs its own capability gate, so these settings are harmless on other builds.
++    SwitchableSetting<bool> mali_native_frame_gen{linkage, false, "mali_native_frame_gen",
++                                                  Category::Renderer, Specialization::Default,
++                                                  true, false};
++
++    SwitchableSetting<u32, true> mali_native_frame_gen_mode{linkage,
++                                                             1,
++                                                             0,
++                                                             3,
++                                                             "mali_native_frame_gen_mode",
++                                                             Category::Renderer,
++                                                             Specialization::Countable,
++                                                             true,
++                                                             false,
++                                                             &mali_native_frame_gen};
++
++    SwitchableSetting<u32, true> mali_native_frame_gen_target{linkage,
++                                                               0,
++                                                               0,
++                                                               60,
++                                                               "mali_native_frame_gen_target",
++                                                               Category::Renderer,
++                                                               Specialization::Countable,
++                                                               true,
++                                                               false,
++                                                               &mali_native_frame_gen};
++
++    SwitchableSetting<bool> mali_native_frame_gen_debug_overlay{
++        linkage, false, "mali_native_frame_gen_debug_overlay", Category::Renderer,
++        Specialization::Default, true, false, &mali_native_frame_gen};
++
+     SwitchableSetting<bool> use_asynchronous_gpu_emulation{linkage,
+ #ifdef __ANDROID__
+         false,
+diff --git a/src/common/thread_worker.h b/src/common/thread_worker.h
+index ec3ca0a..d442d5e 100644
+--- a/src/common/thread_worker.h
++++ b/src/common/thread_worker.h
+@@ -20,6 +20,10 @@
+ #include "common/thread.h"
+ #include "common/unique_function.h"
+ 
++#if defined(__ANDROID__)
++#include "common/android/poco_x7pro_profile.h"
++#endif
++
+ namespace Common {
+ 
+ template <class StateType = void>
+@@ -45,6 +49,22 @@ public:
+             if (placement != ThreadPlacement::Default) {
+                 Common::SetCurrentThreadPriority(ThreadPriority::Low);
+             }
++#if defined(__ANDROID__)
++            // The profile verifies model, SoC and GPU before applying an affinity policy.
++            if (Android::IsPocoX7ProProfileActive()) {
++                switch (placement) {
++                case ThreadPlacement::Efficiency:
++                    Android::ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole::AsyncWorker);
++                    break;
++                case ThreadPlacement::Background:
++                    Android::ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole::ShaderCompiler);
++                    break;
++                default:
++                    Common::SetCurrentThreadToAllCores();
++                    break;
++                }
++            } else
++#endif
+             switch (placement) {
+             case ThreadPlacement::Efficiency:
+                 Common::SetCurrentThreadToEfficiencyCores();
+diff --git a/src/core/cpu_manager.cpp b/src/core/cpu_manager.cpp
+index 23d5ac3..1633e6e 100644
+--- a/src/core/cpu_manager.cpp
++++ b/src/core/cpu_manager.cpp
+@@ -7,6 +7,9 @@
+ #include "common/fiber.h"
+ #include "common/scope_exit.h"
+ #include "common/thread.h"
++#if defined(__ANDROID__)
++#include "common/android/poco_x7pro_profile.h"
++#endif
+ #include "common/settings.h"
+ #include "core/core.h"
+ #include "core/core_timing.h"
+@@ -174,6 +177,12 @@ void CpuManager::RunThread(std::stop_token token, std::size_t core) {
+     std::string name = is_multicore ? ("CPUCore_" + std::to_string(core)) : std::string{"CPUThread"};
+     Common::SetCurrentThreadName(name.c_str());
+     Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
++#if defined(__ANDROID__)
++    if (Common::Android::IsPocoX7ProProfileActive()) {
++        Common::Android::ApplyPocoX7ProThreadAffinity(
++            Common::Android::PocoX7ProThreadRole::CpuEmulation);
++    } else
++#endif
+     Common::SetCurrentThreadToPerformanceCores();
+     auto& data = core_data[core];
+     data.host_context = Common::Fiber::ThreadToFiber();
+diff --git a/src/video_core/CMakeLists.txt b/src/video_core/CMakeLists.txt
+index 06b77a2..1da129a 100644
+--- a/src/video_core/CMakeLists.txt
++++ b/src/video_core/CMakeLists.txt
+@@ -302,6 +302,14 @@ if (ENABLE_LSFG)
+     target_compile_definitions(video_core PUBLIC HAS_LSFG)
+ endif()
+ 
++if (ENABLE_MALI_X7PRO_FG)
++    target_sources(video_core PRIVATE
++        renderer_vulkan/present/mali_native_frame_gen.cpp
++        renderer_vulkan/present/mali_native_frame_gen.h
++    )
++    target_compile_definitions(video_core PUBLIC HAS_MALI_X7PRO_FG)
++endif()
++
+ if (ENABLE_RESHADE)
+     set(BUNDLED_FX_DIR ${CMAKE_SOURCE_DIR}/dist/post_shaders)
+     set(BUNDLED_FX_HEADER ${CMAKE_CURRENT_BINARY_DIR}/bundled_fx_effects.h)
+diff --git a/src/video_core/gpu_thread.cpp b/src/video_core/gpu_thread.cpp
+index a01375e..5a6a97e 100644
+--- a/src/video_core/gpu_thread.cpp
++++ b/src/video_core/gpu_thread.cpp
+@@ -8,6 +8,9 @@
+ #include "common/scope_exit.h"
+ #include "common/settings.h"
+ #include "common/thread.h"
++#if defined(__ANDROID__)
++#include "common/android/poco_x7pro_profile.h"
++#endif
+ #include "core/core.h"
+ #include "core/frontend/graphics_context.h"
+ #include "video_core/control/scheduler.h"
+@@ -30,6 +33,12 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
+     thread = std::jthread([&](std::stop_token stop_token) {
+         Common::SetCurrentThreadName("GPU");
+         Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
++#if defined(__ANDROID__)
++        if (Common::Android::IsPocoX7ProProfileActive()) {
++            Common::Android::ApplyPocoX7ProThreadAffinity(
++                Common::Android::PocoX7ProThreadRole::RendererCritical);
++        } else
++#endif
+         Common::SetCurrentThreadToPerformanceCores();
+         system.RegisterHostThread();
+ 
+diff --git a/src/video_core/host_shaders/CMakeLists.txt b/src/video_core/host_shaders/CMakeLists.txt
+index c4e7ac3..70975e7 100644
+--- a/src/video_core/host_shaders/CMakeLists.txt
++++ b/src/video_core/host_shaders/CMakeLists.txt
+@@ -86,6 +86,8 @@ set(SHADER_FILES
+     ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_quad_indexed.comp
+     ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_turbo_mode.comp
+     ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_uint8.comp
++    ${CMAKE_CURRENT_SOURCE_DIR}/mali_x7pro_motion.comp
++    ${CMAKE_CURRENT_SOURCE_DIR}/mali_x7pro_interpolate.comp
+ 
+     # Snapdragon Game Super Resolution
+     ${CMAKE_CURRENT_SOURCE_DIR}/sgsr1_shader.vert
+diff --git a/src/video_core/host_shaders/mali_x7pro_interpolate.comp b/src/video_core/host_shaders/mali_x7pro_interpolate.comp
+new file mode 100644
+index 0000000..98a9870
+--- /dev/null
++++ b/src/video_core/host_shaders/mali_x7pro_interpolate.comp
+@@ -0,0 +1,68 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++// Motion-compensated midpoint interpolation. This deliberately preserves the current frame for
++// low-confidence or high-edge regions instead of fabricating unstable HUD/text pixels.
++#version 460 core
++
++layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
++
++layout(rgba8, set = 0, binding = 0) uniform readonly image2D previous_frame;
++layout(rgba8, set = 0, binding = 1) uniform readonly image2D current_frame;
++layout(rg16f, set = 0, binding = 2) uniform readonly image2D motion_vectors;
++layout(r8, set = 0, binding = 3) uniform readonly image2D confidence_image;
++layout(rgba8, set = 0, binding = 4) uniform writeonly image2D generated_frame;
++
++layout(push_constant) uniform InterpolationParameters {
++    uvec2 frame_extent;
++    uvec2 motion_extent;
++    uint motion_scale;
++    uint reserved;
++    float interpolation_time;
++    float minimum_confidence;
++    float edge_threshold;
++    float reserved_float;
++} params;
++
++ivec2 ClampFrame(ivec2 coord) {
++    return clamp(coord, ivec2(0), ivec2(params.frame_extent) - ivec2(1));
++}
++
++vec4 LoadLinear(image2D image, vec2 coord) {
++    const vec2 clamped = clamp(coord, vec2(0.0), vec2(params.frame_extent) - vec2(1.0));
++    const ivec2 base = ivec2(floor(clamped));
++    const vec2 fraction = fract(clamped);
++    const vec4 a = imageLoad(image, ClampFrame(base));
++    const vec4 b = imageLoad(image, ClampFrame(base + ivec2(1, 0)));
++    const vec4 c = imageLoad(image, ClampFrame(base + ivec2(0, 1)));
++    const vec4 d = imageLoad(image, ClampFrame(base + ivec2(1, 1)));
++    return mix(mix(a, b, fraction.x), mix(c, d, fraction.x), fraction.y);
++}
++
++float EdgeStrength(ivec2 coord) {
++    const vec3 center = imageLoad(current_frame, ClampFrame(coord)).rgb;
++    const vec3 right = imageLoad(current_frame, ClampFrame(coord + ivec2(1, 0))).rgb;
++    const vec3 down = imageLoad(current_frame, ClampFrame(coord + ivec2(0, 1))).rgb;
++    return max(length(center - right), length(center - down));
++}
++
++void main() {
++    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
++    if (any(greaterThanEqual(uvec2(coord), params.frame_extent))) {
++        return;
++    }
++
++    const ivec2 motion_coord = clamp(coord / int(params.motion_scale), ivec2(0),
++                                     ivec2(params.motion_extent) - ivec2(1));
++    const vec2 motion = imageLoad(motion_vectors, motion_coord).xy;
++    float confidence = imageLoad(confidence_image, motion_coord).x;
++    if (EdgeStrength(coord) > params.edge_threshold) {
++        confidence *= 0.5;
++    }
++
++    const vec4 current = LoadLinear(current_frame, vec2(coord) - motion * params.interpolation_time);
++    const vec4 previous = LoadLinear(previous_frame,
++                                     vec2(coord) + motion * (1.0 - params.interpolation_time));
++    const float blend = confidence >= params.minimum_confidence ? confidence : 0.0;
++    imageStore(generated_frame, coord, mix(current, previous, 0.5 * blend));
++}
+diff --git a/src/video_core/host_shaders/mali_x7pro_motion.comp b/src/video_core/host_shaders/mali_x7pro_motion.comp
+new file mode 100644
+index 0000000..7b0bb78
+--- /dev/null
++++ b/src/video_core/host_shaders/mali_x7pro_motion.comp
+@@ -0,0 +1,72 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++// Low-resolution block matching for the self-contained Mali frame generator. Each invocation
++// writes one motion cell; the interpolation pass reuses it for a small source-image region.
++#version 460 core
++
++layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
++
++layout(rgba8, set = 0, binding = 0) uniform readonly image2D previous_frame;
++layout(rgba8, set = 0, binding = 1) uniform readonly image2D current_frame;
++layout(rg16f, set = 0, binding = 2) uniform writeonly image2D motion_vectors;
++layout(r8, set = 0, binding = 3) uniform writeonly image2D confidence_image;
++
++layout(push_constant) uniform MotionParameters {
++    uvec2 frame_extent;
++    uvec2 motion_extent;
++    uint motion_scale;
++    uint search_radius;
++    float confidence_bias;
++    float reserved;
++} params;
++
++float Luma(vec3 color) {
++    return dot(color, vec3(0.2126, 0.7152, 0.0722));
++}
++
++ivec2 ClampFrame(ivec2 coord) {
++    return clamp(coord, ivec2(0), ivec2(params.frame_extent) - ivec2(1));
++}
++
++float MatchCost(ivec2 current_coord, ivec2 candidate) {
++    const ivec2 taps[5] = ivec2[5](ivec2(0), ivec2(-2, 0), ivec2(2, 0),
++                                   ivec2(0, -2), ivec2(0, 2));
++    float cost = 0.0;
++    for (uint i = 0; i < 5; ++i) {
++        const float a = Luma(imageLoad(current_frame, ClampFrame(current_coord + taps[i])).rgb);
++        const float b = Luma(imageLoad(previous_frame,
++                                       ClampFrame(current_coord + candidate + taps[i])).rgb);
++        cost += abs(a - b);
++    }
++    return cost * 0.2;
++}
++
++void main() {
++    const ivec2 motion_coord = ivec2(gl_GlobalInvocationID.xy);
++    if (any(greaterThanEqual(uvec2(motion_coord), params.motion_extent))) {
++        return;
++    }
++
++    const ivec2 source_coord = ClampFrame(motion_coord * int(params.motion_scale) +
++                                          ivec2(int(params.motion_scale) / 2));
++    float best_cost = 1e20;
++    ivec2 best_offset = ivec2(0);
++    const int radius = int(params.search_radius);
++    for (int y = -radius; y <= radius; ++y) {
++        for (int x = -radius; x <= radius; ++x) {
++            const ivec2 candidate = ivec2(x, y);
++            const float cost = MatchCost(source_coord, candidate);
++            if (cost < best_cost) {
++                best_cost = cost;
++                best_offset = candidate;
++            }
++        }
++    }
++
++    // A confidence derived from the actual temporal residual prevents aggressive warping on HUD,
++    // disocclusions, fades, and material changes.
++    const float confidence = clamp(1.0 - best_cost / max(params.confidence_bias, 0.001), 0.0, 1.0);
++    imageStore(motion_vectors, motion_coord, vec4(vec2(best_offset), 0.0, 1.0));
++    imageStore(confidence_image, motion_coord, vec4(confidence, 0.0, 0.0, 1.0));
++}

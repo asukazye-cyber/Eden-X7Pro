@@ -1,0 +1,268 @@
+diff --git a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
+new file mode 100644
+index 0000000..807be1b
+--- /dev/null
++++ b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
+@@ -0,0 +1,115 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <array>
++#include <string_view>
++
++#include "common/common_types.h"
++#include "video_core/vulkan_common/vulkan_memory_allocator.h"
++#include "video_core/vulkan_common/vulkan_wrapper.h"
++
++namespace Vulkan {
++
++class Device;
++class Scheduler;
++struct Frame;
++
++// A small, self-contained two-pass Vulkan implementation: block matching produces a real motion
++// field and confidence image, then a second compute pass motion-warps the two GPU-resident frames
++// into the intermediate presentation frame. It never consumes the LSFG DLL pipeline.
++class MaliNativeFrameGen {
++public:
++    explicit MaliNativeFrameGen(MemoryAllocator& memory_allocator, Scheduler& scheduler);
++    ~MaliNativeFrameGen();
++
++    void Process(const Device& device, Frame* frame, VkFormat format, VkExtent2D guest_extent);
++    [[nodiscard]] size_t WantedGenerations(size_t capacity);
++    [[nodiscard]] size_t GeneratedFrameCount() const;
++    void GenerateInto(const Device& device, Frame* destination, size_t generation);
++
++private:
++    struct Image {
++        vk::Image image;
++        vk::ImageView view;
++        VkExtent2D extent{};
++        VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
++    };
++
++    struct MotionConstants {
++        u32 frame_width;
++        u32 frame_height;
++        u32 motion_width;
++        u32 motion_height;
++        u32 motion_scale;
++        u32 search_radius;
++        f32 confidence_bias;
++        f32 reserved;
++    };
++    static_assert(sizeof(MotionConstants) == 32);
++
++    struct InterpolationConstants {
++        u32 frame_width;
++        u32 frame_height;
++        u32 motion_width;
++        u32 motion_height;
++        u32 motion_scale;
++        u32 reserved;
++        f32 interpolation_time;
++        f32 minimum_confidence;
++        f32 edge_threshold;
++        f32 reserved_float;
++    };
++    static_assert(sizeof(InterpolationConstants) == 40);
++
++    struct QualityConfig {
++        u32 motion_scale;
++        u32 search_radius;
++        f32 confidence_bias;
++        f32 minimum_confidence;
++        f32 edge_threshold;
++    };
++
++    [[nodiscard]] bool EnsureReady(const Device& device, Frame* frame, VkFormat format);
++    void Rebuild(const Device& device, VkExtent2D extent);
++    void Reset();
++    void CopyCurrentFrame(Frame* frame);
++    void UpdateMotionDescriptors(const Device& device, VkDescriptorSet set);
++    void UpdateInterpolationDescriptors(const Device& device, VkDescriptorSet set,
++                                        VkImageView target);
++    [[nodiscard]] QualityConfig SelectQuality() const;
++    void Disable(std::string_view reason);
++
++    MemoryAllocator& memory_allocator;
++    Scheduler& scheduler;
++
++    std::array<Image, 2> history;
++    Image motion;
++    Image confidence;
++    VkExtent2D extent{};
++    VkExtent2D motion_extent{};
++    VkFormat format{VK_FORMAT_UNDEFINED};
++    u32 current_history{};
++    u32 history_count{};
++    u32 configured_motion_scale{};
++    u64 frame_count{};
++    u64 generated_frame_total{};
++    size_t wanted_generations{};
++    size_t generated_frames{};
++    bool unavailable{};
++    bool reported_active{};
++
++    vk::DescriptorPool descriptor_pool;
++    vk::DescriptorSetLayout motion_set_layout;
++    vk::DescriptorSetLayout interpolation_set_layout;
++    vk::PipelineLayout motion_pipeline_layout;
++    vk::PipelineLayout interpolation_pipeline_layout;
++    vk::ShaderModule motion_shader;
++    vk::ShaderModule interpolation_shader;
++    vk::Pipeline motion_pipeline;
++    vk::Pipeline interpolation_pipeline;
++    vk::DescriptorSets descriptor_sets;
++};
++
++} // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+index 4fd4c02..e326970 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+@@ -15,6 +15,9 @@
+ #include <fmt/ranges.h>
+ 
+ #include "common/logging.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/poco_x7pro_profile.h"
++#endif
+ #include <ranges>
+ #include "common/scope_exit.h"
+ #include "common/settings.h"
+@@ -52,7 +55,7 @@ constexpr VkExtent2D CaptureImageSize{
+     .height = VideoCore::Capture::LinearHeight,
+ };
+ 
+-#ifdef HAS_LSFG
++#if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
+ [[nodiscard]] VkExtent2D GuestExtent(std::span<const Tegra::FramebufferConfig> framebuffers) {
+     if (framebuffers.empty()) {
+         return VkExtent2D{};
+@@ -178,9 +181,26 @@ try
+     , rasterizer(render_window, gpu, device_memory, device, memory_allocator, state_tracker, scheduler)
+ #ifdef HAS_LSFG
+     , frame_gen(memory_allocator, scheduler)
++#elif defined(HAS_MALI_X7PRO_FG)
++    , frame_gen(memory_allocator, scheduler)
+ #endif
+ {
+ 
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::UpdatePocoX7ProVulkanDevice(device.GetVendorName(), device.GetModelName(),
++                                                 device.ApiVersion(), device.GetDriverVersion());
++    LOG_INFO(Render_Vulkan,
++             "[MALI-FG] diagnostics: profile={} compute={} rgba8_storage={} rg16f_storage={} "
++             "r8_storage={}",
++             Common::Android::PocoX7ProProfileStatus(), !device.HasBrokenCompute(),
++             device.IsFormatSupported(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
++                                      FormatType::Optimal),
++             device.IsFormatSupported(VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
++                                      FormatType::Optimal),
++             device.IsFormatSupported(VK_FORMAT_R8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
++                                      FormatType::Optimal));
++#endif
++
+     if (Settings::values.renderer_force_max_clock.GetValue() && device.ShouldBoostClocks()) {
+         turbo_mode.emplace(instance, dld);
+         scheduler.RegisterOnSubmit([this] { turbo_mode->QueueSubmitted(); });
+@@ -220,7 +240,7 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+                                render_window.GetFramebufferLayout(), swapchain.GetImageCount(),
+                                swapchain.GetImageViewFormat());
+ 
+-#ifdef HAS_LSFG
++#if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
+     void(frame_gen.WantedGenerations(present_manager.MaxExtraFrames()));
+ 
+     frame_gen.Process(device, frame, swapchain.GetImageFormat(), GuestExtent(framebuffers));
+@@ -238,7 +258,7 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+     scheduler.Flush(*frame->render_ready);
+ 
+     present_manager.Present(frame);
+-#ifdef HAS_LSFG
++#if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
+     scheduler.DispatchWork();
+ #endif
+ 
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.h b/src/video_core/renderer_vulkan/renderer_vulkan.h
+index 87422dd..d1c1982 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.h
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.h
+@@ -15,6 +15,8 @@
+ #include "video_core/renderer_base.h"
+ #ifdef HAS_LSFG
+ #include "video_core/renderer_vulkan/present/frame_gen.h"
++#elif defined(HAS_MALI_X7PRO_FG)
++#include "video_core/renderer_vulkan/present/mali_native_frame_gen.h"
+ #endif
+ #include "video_core/renderer_vulkan/vk_blit_screen.h"
+ #include "video_core/renderer_vulkan/vk_present_manager.h"
+@@ -103,6 +105,8 @@ private:
+     RasterizerVulkan rasterizer;
+ #ifdef HAS_LSFG
+     FrameGen frame_gen;
++#elif defined(HAS_MALI_X7PRO_FG)
++    MaliNativeFrameGen frame_gen;
+ #endif
+     std::optional<TurboMode> turbo_mode;
+ 
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.cpp b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+index 3491f8f..4be3217 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.cpp
++++ b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+@@ -6,6 +6,9 @@
+ 
+ #include "common/settings.h"
+ #include "common/thread.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/poco_x7pro_profile.h"
++#endif
+ #include "core/frontend/emu_window.h"
+ #ifdef HAS_LSFG
+ #include "video_core/renderer_vulkan/present/lsfg_common.h"
+@@ -28,10 +31,16 @@ static_assert(MAX_FRAMES_IN_FLIGHT <= LSFG_MAX_TARGETS);
+ #endif
+ 
+ bool CanStoreToFrame(const vk::PhysicalDevice& physical_device, VkFormat format) {
++#if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
+ #ifdef HAS_LSFG
+     if (!Settings::values.frame_gen.GetValue()) {
+         return false;
+     }
++#elif defined(HAS_MALI_X7PRO_FG)
++    if (!Settings::values.mali_native_frame_gen.GetValue()) {
++        return false;
++    }
++#endif
+     const VkFormatProperties props{physical_device.GetFormatProperties(format)};
+     return (props.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0;
+ #else
+@@ -324,7 +333,16 @@ void PresentManager::WaitPresent() {
+ void PresentManager::PresentThread(std::stop_token token) {
+     Common::SetCurrentThreadName("VulkanPresent");
+     Common::SetCurrentThreadPriority(Common::ThreadPriority::High);
++#ifdef HAS_MALI_X7PRO_FG
++    if (Common::Android::IsPocoX7ProProfileActive()) {
++        Common::Android::ApplyPocoX7ProThreadAffinity(
++            Common::Android::PocoX7ProThreadRole::GpuSubmission);
++    } else {
++        Common::SetCurrentThreadToPerformanceCores();
++    }
++#else
+     Common::SetCurrentThreadToPerformanceCores();
++#endif
+     while (!token.stop_requested()) {
+         std::unique_lock lock{queue_mutex};
+         // Wait for presentation frames
+@@ -441,7 +459,7 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+         VkImageMemoryBarrier{
+             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+             .pNext = nullptr,
+-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
++            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+             .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+             .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+             .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
