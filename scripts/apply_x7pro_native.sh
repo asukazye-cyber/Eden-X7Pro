@@ -12,9 +12,9 @@ if [[ ! -d "$eden_dir/src/android" || ! -f "$eden_dir/CMakeLists.txt" ]]; then
   exit 1
 fi
 
-# Build V3 on top of the reviewed V1/V2 defaults. Every text change is applied with git so an
-# upstream layout mismatch fails loudly instead of silently producing a different APK.
-bash "${script_dir}/apply_x7pro_v2.sh" "$eden_dir"
+# Apply the native patches to the pinned upstream revision first. V1 changes the Android
+# asynchronous-GPU default next to the native frame-generation settings, so applying it first
+# would make git correctly reject the native hunk as ambiguous.
 for patch_file in \
   "${repo_dir}/patches/0003-x7pro-native-profile-and-shaders.patch" \
   "${repo_dir}/patches/0004-x7pro-native-vulkan-integration.patch" \
@@ -23,6 +23,9 @@ for patch_file in \
   git -C "$eden_dir" apply --check "$patch_file"
   git -C "$eden_dir" apply "$patch_file"
 done
+
+# The reviewed V1/V2 defaults are independent once the native changes are in place.
+bash "${script_dir}/apply_x7pro_v2.sh" "$eden_dir"
 
 # The compute implementation is kept as a compressed, source-only asset to avoid carrying an
 # additional copy of the whole upstream tree. It is decompressed deterministically into the file
