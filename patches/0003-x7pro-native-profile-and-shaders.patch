@@ -1,4 +1,4 @@
-diff --git a/CMakeLists.txt b/CMakeLists.txt
+ diff --git a/CMakeLists.txt b/CMakeLists.txt
 index f5c360b..7482cfa 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
@@ -416,7 +416,7 @@ new file mode 100644
 index 0000000..98a9870
 --- /dev/null
 +++ b/src/video_core/host_shaders/mali_x7pro_interpolate.comp
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,79 @@
 +// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +
