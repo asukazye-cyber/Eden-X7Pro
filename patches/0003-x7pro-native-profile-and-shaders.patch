@@ -311,10 +311,10 @@ index ec3ca0a..d442d5e 100644
 +            if (Android::IsPocoX7ProProfileActive()) {
 +                switch (placement) {
 +                case ThreadPlacement::Efficiency:
-+                    Android::ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole::AsyncWorker);
++                    Android::ApplyPocoX7ProThreadAffinity(Android::PocoX7ProThreadRole::AsyncWorker);
 +                    break;
 +                case ThreadPlacement::Background:
-+                    Android::ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole::ShaderCompiler);
++                    Android::ApplyPocoX7ProThreadAffinity(Android::PocoX7ProThreadRole::ShaderCompiler);
 +                    break;
 +                default:
 +                    Common::SetCurrentThreadToAllCores();
