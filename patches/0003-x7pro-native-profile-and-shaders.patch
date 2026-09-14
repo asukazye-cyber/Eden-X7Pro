@@ -416,7 +416,7 @@ new file mode 100644
 index 0000000..98a9870
 --- /dev/null
 +++ b/src/video_core/host_shaders/mali_x7pro_interpolate.comp
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,76 @@
 +// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +
@@ -447,14 +447,25 @@ index 0000000..98a9870
 +    return clamp(coord, ivec2(0), ivec2(params.frame_extent) - ivec2(1));
 +}
 +
-+vec4 LoadLinear(image2D image, vec2 coord) {
++vec4 LoadCurrentLinear(vec2 coord) {
 +    const vec2 clamped = clamp(coord, vec2(0.0), vec2(params.frame_extent) - vec2(1.0));
 +    const ivec2 base = ivec2(floor(clamped));
 +    const vec2 fraction = fract(clamped);
-+    const vec4 a = imageLoad(image, ClampFrame(base));
-+    const vec4 b = imageLoad(image, ClampFrame(base + ivec2(1, 0)));
-+    const vec4 c = imageLoad(image, ClampFrame(base + ivec2(0, 1)));
-+    const vec4 d = imageLoad(image, ClampFrame(base + ivec2(1, 1)));
++    const vec4 a = imageLoad(current_frame, ClampFrame(base));
++    const vec4 b = imageLoad(current_frame, ClampFrame(base + ivec2(1, 0)));
++    const vec4 c = imageLoad(current_frame, ClampFrame(base + ivec2(0, 1)));
++    const vec4 d = imageLoad(current_frame, ClampFrame(base + ivec2(1, 1)));
++    return mix(mix(a, b, fraction.x), mix(c, d, fraction.x), fraction.y);
++}
++
++vec4 LoadPreviousLinear(vec2 coord) {
++    const vec2 clamped = clamp(coord, vec2(0.0), vec2(params.frame_extent) - vec2(1.0));
++    const ivec2 base = ivec2(floor(clamped));
++    const vec2 fraction = fract(clamped);
++    const vec4 a = imageLoad(previous_frame, ClampFrame(base));
++    const vec4 b = imageLoad(previous_frame, ClampFrame(base + ivec2(1, 0)));
++    const vec4 c = imageLoad(previous_frame, ClampFrame(base + ivec2(0, 1)));
++    const vec4 d = imageLoad(previous_frame, ClampFrame(base + ivec2(1, 1)));
 +    return mix(mix(a, b, fraction.x), mix(c, d, fraction.x), fraction.y);
 +}
 +
@@ -479,9 +490,9 @@ index 0000000..98a9870
 +        confidence *= 0.5;
 +    }
 +
-+    const vec4 current = LoadLinear(current_frame, vec2(coord) - motion * params.interpolation_time);
-+    const vec4 previous = LoadLinear(previous_frame,
-+                                     vec2(coord) + motion * (1.0 - params.interpolation_time));
++    const vec4 current = LoadCurrentLinear(vec2(coord) - motion * params.interpolation_time);
++    const vec4 previous = LoadPreviousLinear(vec2(coord) +
++                                              motion * (1.0 - params.interpolation_time));
 +    const float blend = confidence >= params.minimum_confidence ? confidence : 0.0;
 +    imageStore(generated_frame, coord, mix(current, previous, 0.5 * blend));
 +}
