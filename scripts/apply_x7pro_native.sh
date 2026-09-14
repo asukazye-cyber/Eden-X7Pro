@@ -34,6 +34,8 @@ source_asset="${repo_dir}/overrides/mali_native_frame_gen.cpp.gz.b64"
 target_source="${eden_dir}/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp"
 [[ -f "$source_asset" ]] || { echo "Missing native frame-generation source asset." >&2; exit 1; }
 base64 --decode "$source_asset" | gzip --decompress > "$target_source"
+# Eden's DivCeil concept requires an unsigned divisor; the source uses uint32_t extents.
+sed -i 's/, 8)/, 8u)/g' "$target_source"
 if ! grep -Fq '#include "video_core/renderer_vulkan/present/mali_native_frame_gen.h"' "$target_source"; then
   sed -i '/^#include <vector>$/a#include "video_core/renderer_vulkan/present/mali_native_frame_gen.h"' "$target_source"
 fi
