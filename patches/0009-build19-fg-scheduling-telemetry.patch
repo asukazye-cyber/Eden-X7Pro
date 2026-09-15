@@ -1472,14 +1472,15 @@ index d926cc1..30fdf3b 100644
      bool NeedsRecreation() const {
 diff --git a/src/video_core/renderer_vulkan/x7pro_gpu_timing.h b/src/video_core/renderer_vulkan/x7pro_gpu_timing.h
 new file mode 100644
-index 0000000..d21d0f7
+index 0000000..cc8b51e
 --- /dev/null
 +++ b/src/video_core/renderer_vulkan/x7pro_gpu_timing.h
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,95 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +#pragma once
 +#include <array>
 +#include "common/android/x7pro_telemetry.h"
++#include "video_core/renderer_vulkan/vk_master_semaphore.h"
 +#include "video_core/vulkan_common/vulkan_device.h"
 +
 +namespace Vulkan {
@@ -1513,7 +1514,7 @@ index 0000000..d21d0f7
 +        if (pending == SlotCount) { write_frame_valid = false; T::GpuUnavailable("timestamp ring full; sample skipped"); return; }
 +        current = static_cast<int>((head + pending) % SlotCount);
 +        cmd.ResetQueryPool(*pool, 2 * current, 2);
-+        device.GetDispatchLoader().vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
++        device.GetDispatchLoader().vkCmdWriteTimestamp(*cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 +                                                      *pool, 2 * current);
 +    }
 +    void End(vk::CommandBuffer cmd, uint64_t tick, bool real_end, bool fg) {
@@ -1522,7 +1523,7 @@ index 0000000..d21d0f7
 +            if (real_end) { ++write_frame; write_frame_valid = true; }
 +            return;
 +        }
-+        device.GetDispatchLoader().vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
++        device.GetDispatchLoader().vkCmdWriteTimestamp(*cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 +                                                      *pool, 2 * current + 1);
 +        slots[current] = {tick, write_frame, real_end, fg, write_frame_valid};
 +        if (real_end) { ++write_frame; write_frame_valid = true; }
