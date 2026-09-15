@@ -12,7 +12,7 @@ if [[ ! -d "$eden_dir/src/android" || ! -f "$eden_dir/CMakeLists.txt" ]]; then
   exit 1
 fi
 
-# Apply the native patches to the pinned upstream revision first. V1 changes the Android
+# Apply the native patches to the pinned upstream revision first.  V1 changes the Android
 # asynchronous-GPU default next to the native frame-generation settings, so applying it first
 # would make git correctly reject the native hunk as ambiguous.
 for patch_file in \
@@ -34,11 +34,11 @@ source_asset="${repo_dir}/overrides/mali_native_frame_gen.cpp.gz.b64"
 target_source="${eden_dir}/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp"
 [[ -f "$source_asset" ]] || { echo "Missing native frame-generation source asset." >&2; exit 1; }
 base64 --decode "$source_asset" | gzip --decompress > "$target_source"
-# Eden's DivCeil concept requires an unsigned divisor; the source uses uint32_t extents.
-sed -i 's/, 8)/, 8u)/g' "$target_source"
 if ! grep -Fq '#include "video_core/renderer_vulkan/present/mali_native_frame_gen.h"' "$target_source"; then
   sed -i '/^#include <vector>$/a#include "video_core/renderer_vulkan/present/mali_native_frame_gen.h"' "$target_source"
 fi
+# Eden's DivCeil concept requires an unsigned divisor; the source uses uint32_t extents.
+sed -i 's/, 8)/, 8u)/g' "$target_source"
 test -s "$target_source"
 grep -Fq 'MaliNativeFrameGen::GenerateInto' "$target_source"
 

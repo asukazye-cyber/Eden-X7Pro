@@ -32,7 +32,7 @@ new file mode 100644
 index 0000000..804a632
 --- /dev/null
 +++ b/src/common/android/poco_x7pro_profile.cpp
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,178 @@
 +// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +
@@ -56,6 +56,8 @@ index 0000000..804a632
 +    std::mutex mutex;
 +    bool poco_x7_pro{};
 +    bool mali_g720{};
++    std::string vulkan_model;
++    std::string vulkan_driver;
 +    bool logged{};
 +    std::string status{"device-not-detected"};
 +    std::string frame_gen_phase{"inactive"};
@@ -131,13 +133,20 @@ index 0000000..804a632
 +                                 u32 api_version, u32 driver_version) {
 +    DetectPocoX7ProDevice();
 +    auto& state = State();
-+    const std::string driver = Lower(std::string{driver_name});
 +    const std::string model = Lower(std::string{model_name});
-+    const bool mali_g720 = Has(model, "mali-g720") && (Has(driver, "arm") || !driver.empty());
++    const bool reported_mali_g720 = Has(model, "mali-g720") || Has(model, "mali g720") ||
++                                    Has(model, "g720");
 +
 +    std::scoped_lock lock{state.mutex};
-+    state.mali_g720 = mali_g720;
-+    state.status = state.poco_x7_pro && state.mali_g720 ? "active" : "gpu-mismatch";
++    // The SoC/product gate identifies the physical GPU on a stock POCO X7 Pro. Some Android
++    // Vulkan stacks expose a board-specific device name instead of "Mali-G720".
++    const bool x7_pro_driver_fallback = state.poco_x7_pro && !model.empty();
++    state.mali_g720 = reported_mali_g720 || x7_pro_driver_fallback;
++    state.status = state.poco_x7_pro && state.mali_g720
++                       ? (reported_mali_g720 ? "active" : "active-profile-fallback")
++                       : "gpu-mismatch";
++    state.vulkan_model = std::string{model_name};
++    state.vulkan_driver = std::string{driver_name};
 +    if (!state.logged) {
 +        LOG_INFO(Common,
 +                 "[MALI-FG] GPU detected: '{}' driver='{}' api={}.{}.{} driver_version={} profile={}",
@@ -175,7 +184,8 @@ index 0000000..804a632
 +    std::scoped_lock lock{state.mutex};
 +    return "Mali FG: " + state.frame_gen_phase + " | profile=" + state.status +
 +           " | real=" + std::to_string(state.real_frames) +
-+           " | generated=" + std::to_string(state.generated_frames);
++           " | generated=" + std::to_string(state.generated_frames) +
++           " | gpu=" + state.vulkan_model + " | driver=" + state.vulkan_driver;
 +}
 +
 +void ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole role) {
