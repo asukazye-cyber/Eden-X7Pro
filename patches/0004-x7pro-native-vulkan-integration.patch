@@ -169,13 +169,22 @@ index 4fd4c02..e326970 100644
      if (Settings::values.renderer_force_max_clock.GetValue() && device.ShouldBoostClocks()) {
          turbo_mode.emplace(instance, dld);
          scheduler.RegisterOnSubmit([this] { turbo_mode->QueueSubmitted(); });
-@@ -220,7 +240,7 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+@@ -220,7 +240,15 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
                                 render_window.GetFramebufferLayout(), swapchain.GetImageCount(),
                                 swapchain.GetImageViewFormat());
  
 -#ifdef HAS_LSFG
 +#if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
-     void(frame_gen.WantedGenerations(present_manager.MaxExtraFrames()));
+-    void(frame_gen.WantedGenerations(present_manager.MaxExtraFrames()));
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::RecordPocoX7ProRealFrame();
++    const size_t frame_gen_capacity = Common::Android::ShouldGeneratePocoX7ProFrame()
++                                          ? present_manager.MaxExtraFrames()
++                                          : 0;
++#else
++    const size_t frame_gen_capacity = present_manager.MaxExtraFrames();
++#endif
++    void(frame_gen.WantedGenerations(frame_gen_capacity));
  
      frame_gen.Process(device, frame, swapchain.GetImageFormat(), GuestExtent(framebuffers));
 @@ -238,7 +258,7 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu

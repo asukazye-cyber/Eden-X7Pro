@@ -32,12 +32,13 @@ new file mode 100644
 index 0000000..804a632
 --- /dev/null
 +++ b/src/common/android/poco_x7pro_profile.cpp
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,203 @@
 +// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +
 +#include <algorithm>
 +#include <cctype>
++#include <chrono>
 +#include <mutex>
 +#include <string>
 +
@@ -63,6 +64,9 @@ index 0000000..804a632
 +    std::string frame_gen_phase{"inactive"};
 +    u64 real_frames{};
 +    u64 generated_frames{};
++    std::chrono::steady_clock::time_point last_real_frame{};
++    f64 real_frame_ms{};
++    u64 real_frames_over_budget{};
 +};
 +
 +ProfileState& State() {
@@ -164,6 +168,27 @@ index 0000000..804a632
 +    state.generated_frames = generated_frames;
 +}
 +
++void RecordPocoX7ProRealFrame() {
++    auto& state = State();
++    const auto now = std::chrono::steady_clock::now();
++    std::scoped_lock lock{state.mutex};
++    if (state.last_real_frame.time_since_epoch().count() != 0) {
++        const f64 frame_time =
++            std::chrono::duration<f64, std::milli>(now - state.last_real_frame).count();
++        state.real_frame_ms = frame_time;
++        state.real_frames_over_budget += frame_time > 33.333 ? 1 : 0;
++    }
++    state.last_real_frame = now;
++}
++
++bool ShouldGeneratePocoX7ProFrame() {
++    DetectPocoX7ProDevice();
++    auto& state = State();
++    std::scoped_lock lock{state.mutex};
++    // Real emulation takes priority: do not schedule a synthetic frame after a late real frame.
++    return state.real_frame_ms == 0.0 || state.real_frame_ms <= 34.5;
++}
++
 +bool IsPocoX7ProProfileActive() {
 +    DetectPocoX7ProDevice();
 +    auto& state = State();
@@ -216,7 +241,7 @@ new file mode 100644
 index 0000000..26ba190
 --- /dev/null
 +++ b/src/common/android/poco_x7pro_profile.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,39 @@
 +// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +
@@ -244,6 +269,8 @@ index 0000000..26ba190
 +void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view model_name,
 +                                 u32 api_version, u32 driver_version);
 +void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64 real_frames, u64 generated_frames);
++void RecordPocoX7ProRealFrame();
++[[nodiscard]] bool ShouldGeneratePocoX7ProFrame();
 +
 +[[nodiscard]] bool IsPocoX7ProProfileActive();
 +[[nodiscard]] std::string PocoX7ProProfileStatus();
