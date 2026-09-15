@@ -73,7 +73,21 @@ jobs:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           CCACHE: 'true'
-        run: bash scripts/build_x7pro_native.sh "$GITHUB_WORKSPACE/eden"
+        run: |
+          set +e
+          bash scripts/build_x7pro_native.sh "$GITHUB_WORKSPACE/eden" 2>&1 | tee /tmp/build21-android.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if (( status != 0 )); then
+            # Keep compiler diagnostics visible through the Checks API even when the runner's raw
+            # log storage is unavailable to a reviewer.
+            summary="$(grep -E '(^|[[:space:]])(error:|fatal error:)|FAILED|What went wrong|Execution failed' /tmp/build21-android.log | tail -80 || true)"
+            summary="${summary//'%'/'%25'}"
+            summary="${summary//$'\r'/'%0D'}"
+            summary="${summary//$'\n'/'%0A'}"
+            echo "::error title=Android ARM64 build failed::${summary:-See the Build independent Mali X7 Pro APK step log.}"
+            exit "$status"
+          fi
 
       - name: Verify package and native payload
         shell: bash
