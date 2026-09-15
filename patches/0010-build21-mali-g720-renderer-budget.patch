@@ -107,7 +107,7 @@ index 85062770055fe65eac3ed053a388db10d9880801..9de80e1ff9dc9ca602a96736d7a8f748
          android/x7pro_telemetry.cpp
 diff --git a/src/common/android/x7pro_budget_store.cpp b/src/common/android/x7pro_budget_store.cpp
 new file mode 100644
-index 0000000000000000000000000000000000000000..d2b58b42b62fdaad15106b0e38fc4e8d73f47135
+index 0000000000000000000000000000000000000000..974588bbb1ee408f3cd8194e197ce8ac7e056aba
 --- /dev/null
 +++ b/src/common/android/x7pro_budget_store.cpp
 @@ -0,0 +1,174 @@
@@ -228,7 +228,7 @@ index 0000000000000000000000000000000000000000..d2b58b42b62fdaad15106b0e38fc4e8d
 +    }
 +    const auto path = StorePath();
 +    const auto temporary = path.string() + ".tmp";
-+    Common::FS::CreateDir(path.parent_path());
++    static_cast<void>(Common::FS::CreateDir(path.parent_path()));
 +    try {
 +        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
 +        file.exceptions(std::ofstream::failbit | std::ofstream::badbit);
@@ -769,10 +769,10 @@ index 9a9f1e5f8dbe44e8a8cb174651d8e875fa97e29c..64358a9b91a1c76cbabc995d409e2de4
      qualcomm_debug.cpp
 diff --git a/src/video_core/gpu_logging/gpu_flight_recorder.cpp b/src/video_core/gpu_logging/gpu_flight_recorder.cpp
 new file mode 100644
-index 0000000000000000000000000000000000000000..db8f9cb2f3ead7dac58d55f362c188c0ee5f2d01
+index 0000000000000000000000000000000000000000..180c95c527ec86db2af5353583e6227a289a5490
 --- /dev/null
 +++ b/src/video_core/gpu_logging/gpu_flight_recorder.cpp
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,129 @@
 +// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +
@@ -886,14 +886,15 @@ index 0000000000000000000000000000000000000000..db8f9cb2f3ead7dac58d55f362c188c0
 +    try {
 +        Record(FlightEvent::DeviceLost);
 +        const auto directory = Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir) / "gpu_crashes";
-+        Common::FS::CreateDir(directory);
++        static_cast<void>(Common::FS::CreateDir(directory));
 +        Common::FS::IOFile file(directory / "vulkan_flight_recorder.gpu-dump",
 +                                Common::FS::FileAccessMode::Write,
 +                                Common::FS::FileType::TextFile);
 +        if (!file.IsOpen()) {
 +            return;
 +        }
-+        file.WriteString(fmt::format("Reason: {}\n{}", reason, FormatSnapshot()));
++        static_cast<void>(
++            file.WriteString(fmt::format("Reason: {}\n{}", reason, FormatSnapshot())));
 +        file.Flush();
 +    } catch (...) {
 +        // A recorder must never turn a recoverable device-lost path into another exception.
