@@ -59,7 +59,14 @@ build19_patch="${repo_dir}/patches/0009-build19-fg-scheduling-telemetry.patch"
 git -C "$eden_dir" apply --check "$build19_patch"
 git -C "$eden_dir" apply "$build19_patch"
 
+# Build21 is based on the complete Build20 composition above. It centralizes architecture policy
+# and adds only capability-gated, Vulkan-valid renderer fast paths with generic fallbacks.
+build21_patch="${repo_dir}/patches/0010-build21-mali-g720-renderer-budget.patch"
+[[ -f "$build21_patch" ]] || { echo "Missing patch: $build21_patch" >&2; exit 1; }
+git -C "$eden_dir" apply --check "$build21_patch"
+git -C "$eden_dir" apply "$build21_patch"
+
 printf '%s\n' \
-  'Eden Mali X7 Pro: native Vulkan compute frame generation enabled.' \
+  'Eden Mali X7 Pro Build21: capability-gated Mali-G720 renderer and real-frame budget enabled.' \
   'No Lossless.dll, Vulkan memory-model, or VK_EXT_robustness2 requirement is added.' \
-  'The runtime profile remains gated by POCO X7 Pro / MT6899 / Mali-G720 detection.'
+  'Renderer fast paths use Vulkan identity/capabilities and retain independently gated fallbacks.'

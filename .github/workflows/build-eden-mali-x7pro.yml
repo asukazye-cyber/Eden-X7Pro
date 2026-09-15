@@ -2,6 +2,8 @@ name: Build Eden Mali X7 Pro
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -54,12 +56,15 @@ jobs:
         shell: bash
         run: bash scripts/apply_x7pro_native.sh "$GITHUB_WORKSPACE/eden"
 
-      - name: Validate Build19 policy and integration guardrails
+      - name: Validate Build19 and Build21 policy/integration guardrails
         shell: bash
         run: |
           clang++ -std=c++20 -O2 -Wall -Wextra -Werror -I eden/src tests/build19_policy.cpp -o /tmp/build19-policy-test
           /tmp/build19-policy-test
+          clang++ -std=c++20 -O2 -Wall -Wextra -Werror -I tests/stubs -I eden/src tests/build21_policy.cpp -o /tmp/build21-policy-test
+          /tmp/build21-policy-test
           python3 tests/validate_build19.py eden
+          python3 tests/validate_build21.py eden
 
       - name: Build independent Mali X7 Pro APK
         # Keep policy validation separate from Android compilation and hardware benchmarks.

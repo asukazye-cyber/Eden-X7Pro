@@ -1,0 +1,2506 @@
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
+index 8092bba18c576a7804cefe1f3089463e72602023..b5920d67964532706791b780568354c062452ad3 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
+@@ -25,6 +25,7 @@ enum class IntSetting(override val key: String) : AbstractIntSetting {
+     RENDERER_FRAME_GEN_FLOW_SCALE("frame_gen_flow_scale"),
+     RENDERER_MALI_NATIVE_FRAME_GEN_MODE("mali_native_frame_gen_mode"),
+     RENDERER_MALI_NATIVE_FRAME_GEN_TARGET("mali_native_frame_gen_target"),
++    MALI_RENDERER_OPTIMIZATION("mali_renderer_optimization"),
+     X7PRO_HARDWARE_OPTIMIZATION("x7pro_hardware_optimization"),
+     X7PRO_PERFORMANCE_GOVERNOR("x7pro_performance_governor"),
+     X7PRO_FG_GOVERNOR("x7pro_fg_governor"),
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
+index bbaa215b0c70136c7f827a16b4ebb06d5b6f0261..1df0d40806e66b0ccc5196afa2b66268e6040500 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
+@@ -591,6 +591,15 @@ class SettingsFragmentPresenter(
+                     valuesId = R.array.x7proHardwareOptimizationValues
+                 )
+             )
++            add(
++                SingleChoiceSetting(
++                    IntSetting.MALI_RENDERER_OPTIMIZATION,
++                    titleId = R.string.mali_renderer_optimization,
++                    descriptionId = R.string.mali_renderer_optimization_description,
++                    choicesId = R.array.maliRendererOptimizationNames,
++                    valuesId = R.array.maliRendererOptimizationValues
++                )
++            )
+             add(
+                 SingleChoiceSetting(
+                     IntSetting.X7PRO_PERFORMANCE_GOVERNOR,
+diff --git a/src/android/app/src/main/jni/native.cpp b/src/android/app/src/main/jni/native.cpp
+index 113ddd0a7cc85d9371fb43de59c71d0e3350d662..27ebabafea0b5a93a31d7c26b2359411ffcba771 100644
+--- a/src/android/app/src/main/jni/native.cpp
++++ b/src/android/app/src/main/jni/native.cpp
+@@ -46,6 +46,7 @@ extern "C" {
+ #ifdef HAS_MALI_X7PRO_FG
+ #include "common/android/poco_x7pro_profile.h"
+ #include "common/android/x7pro_telemetry.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #endif
+ #include "common/dynamic_library.h"
+ #include "common/fs/fs_util.h"
+@@ -1048,7 +1049,10 @@ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getMaliNativeFrameGenDiagnostics(J
+ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getPocoX7ProPerformanceDiagnostics(JNIEnv* env,
+                                                                                      jobject) {
+ #ifdef HAS_MALI_X7PRO_FG
+-    return Common::Android::ToJString(env, Common::Android::PocoX7ProPerformanceDiagnostics());
++    std::string diagnostics = Common::Android::PocoX7ProPerformanceDiagnostics();
++    diagnostics += "\n";
++    diagnostics += GPU::Logging::RendererDiagnosticsText();
++    return Common::Android::ToJString(env, diagnostics);
+ #else
+     return Common::Android::ToJString(env, "");
+ #endif
+diff --git a/src/android/app/src/main/res/values/arrays.xml b/src/android/app/src/main/res/values/arrays.xml
+index 22c98c77a12f3fbf41898dfca710dcfc5edd713c..7fb062fd25ae6b4a8dee21aa03d44f4e9b385b28 100644
+--- a/src/android/app/src/main/res/values/arrays.xml
++++ b/src/android/app/src/main/res/values/arrays.xml
+@@ -225,6 +225,17 @@
+         <item>60</item>
+     </integer-array>
+ 
++    <string-array name="maliRendererOptimizationNames">
++        <item>@string/mali_renderer_optimization_off</item>
++        <item>@string/mali_renderer_optimization_auto</item>
++        <item>@string/mali_renderer_optimization_aggressive</item>
++    </string-array>
++    <integer-array name="maliRendererOptimizationValues">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </integer-array>
++
+     <string-array name="x7proHardwareOptimizationNames">
+         <item>@string/x7pro_hardware_optimization_auto</item>
+         <item>@string/x7pro_hardware_optimization_standard</item>
+diff --git a/src/android/app/src/main/res/values/strings.xml b/src/android/app/src/main/res/values/strings.xml
+index 232b12460c0335e1ead5f2445b37e26cbeaaed98..aee25871d528ccdeebc5e65110bd4c348d3f2d92 100644
+--- a/src/android/app/src/main/res/values/strings.xml
++++ b/src/android/app/src/main/res/values/strings.xml
+@@ -339,6 +339,11 @@
+     <string name="x7pro_device_optimization_description">POCO X7 Pro hardware profile, real-frame governor, and measured diagnostics</string>
+     <string name="x7pro_hardware_optimization">Hardware Optimization</string>
+     <string name="x7pro_hardware_optimization_description">Auto recognizes the Dimensity 8400 / Mali-G720 target. Standard disables the target-specific affinity and FG policy.</string>
++    <string name="mali_renderer_optimization">Mali Renderer Optimization</string>
++    <string name="mali_renderer_optimization_description">Auto enables capability-checked tile, synchronization, presentation, and descriptor fast paths only on a Vulkan-identified Mali-G720. Aggressive remains Vulkan-valid and never forces unsupported extensions.</string>
++    <string name="mali_renderer_optimization_off">Off</string>
++    <string name="mali_renderer_optimization_auto">Auto</string>
++    <string name="mali_renderer_optimization_aggressive">Aggressive</string>
+     <string name="x7pro_hardware_optimization_auto">Auto</string>
+     <string name="x7pro_hardware_optimization_standard">Standard</string>
+     <string name="x7pro_hardware_optimization_target">Dimensity 8400 / Mali-G720</string>
+diff --git a/src/common/CMakeLists.txt b/src/common/CMakeLists.txt
+index 85062770055fe65eac3ed053a388db10d9880801..9de80e1ff9dc9ca602a96736d7a8f748f5a05fb6 100644
+--- a/src/common/CMakeLists.txt
++++ b/src/common/CMakeLists.txt
+@@ -168,6 +168,8 @@ if(ANDROID)
+         android/android_common.h
+         android/poco_x7pro_profile.cpp
+         android/poco_x7pro_profile.h
++        android/x7pro_budget_store.cpp
++        android/x7pro_budget_store.h
+         android/x7pro_governor.h
+         android/x7pro_telemetry.h
+         android/x7pro_telemetry.cpp
+diff --git a/src/common/android/x7pro_budget_store.cpp b/src/common/android/x7pro_budget_store.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..d2b58b42b62fdaad15106b0e38fc4e8d73f47135
+--- /dev/null
++++ b/src/common/android/x7pro_budget_store.cpp
+@@ -0,0 +1,174 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#include "common/android/x7pro_budget_store.h"
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <fstream>
++#include <mutex>
++#include <vector>
++
++#include "common/fs/fs.h"
++#include "common/fs/path_util.h"
++#include "common/logging.h"
++
++namespace Common::Android::X7Pro {
++namespace {
++
++constexpr std::array<char, 8> Magic{'X', '7', 'B', 'U', 'D', '2', '1', '\0'};
++constexpr u32 Version = 1;
++constexpr u32 MaxRecords = 32;
++constexpr size_t SerializedRecordBytes = sizeof(u64) * 2 + sizeof(u32) * 2 + sizeof(float) * 4;
++constexpr size_t HeaderBytes = Magic.size() + sizeof(Version) + sizeof(u32);
++constexpr size_t MaxFileBytes = HeaderBytes + MaxRecords * SerializedRecordBytes;
++std::mutex store_mutex;
++
++std::filesystem::path StorePath() {
++    return Common::FS::GetEdenPath(Common::FS::EdenPath::CacheDir) /
++           "x7pro_budget_history.bin";
++}
++
++bool Valid(const TitleBudgetHistory& record) {
++    return record.title_id != 0 && record.real_samples <= 10'000'000 &&
++           std::isfinite(record.real_average_ms) && record.real_average_ms >= 0.0f &&
++           record.real_average_ms <= 500.0f && std::isfinite(record.gpu_average_ms) &&
++           record.gpu_average_ms >= 0.0f && record.gpu_average_ms <= 500.0f &&
++           std::isfinite(record.deadline_miss_ratio) && record.deadline_miss_ratio >= 0.0f &&
++           record.deadline_miss_ratio <= 1.0f && std::isfinite(record.fg_accept_ratio) &&
++           record.fg_accept_ratio >= 0.0f && record.fg_accept_ratio <= 1.0f;
++}
++
++void ReadRecord(std::istream& file, TitleBudgetHistory& record) {
++    file.read(reinterpret_cast<char*>(&record.title_id), sizeof(record.title_id));
++    file.read(reinterpret_cast<char*>(&record.last_used_unix_seconds),
++              sizeof(record.last_used_unix_seconds));
++    file.read(reinterpret_cast<char*>(&record.sessions), sizeof(record.sessions));
++    file.read(reinterpret_cast<char*>(&record.real_samples), sizeof(record.real_samples));
++    file.read(reinterpret_cast<char*>(&record.real_average_ms), sizeof(record.real_average_ms));
++    file.read(reinterpret_cast<char*>(&record.gpu_average_ms), sizeof(record.gpu_average_ms));
++    file.read(reinterpret_cast<char*>(&record.deadline_miss_ratio),
++              sizeof(record.deadline_miss_ratio));
++    file.read(reinterpret_cast<char*>(&record.fg_accept_ratio), sizeof(record.fg_accept_ratio));
++}
++
++void WriteRecord(std::ostream& file, const TitleBudgetHistory& record) {
++    file.write(reinterpret_cast<const char*>(&record.title_id), sizeof(record.title_id));
++    file.write(reinterpret_cast<const char*>(&record.last_used_unix_seconds),
++               sizeof(record.last_used_unix_seconds));
++    file.write(reinterpret_cast<const char*>(&record.sessions), sizeof(record.sessions));
++    file.write(reinterpret_cast<const char*>(&record.real_samples), sizeof(record.real_samples));
++    file.write(reinterpret_cast<const char*>(&record.real_average_ms), sizeof(record.real_average_ms));
++    file.write(reinterpret_cast<const char*>(&record.gpu_average_ms), sizeof(record.gpu_average_ms));
++    file.write(reinterpret_cast<const char*>(&record.deadline_miss_ratio),
++               sizeof(record.deadline_miss_ratio));
++    file.write(reinterpret_cast<const char*>(&record.fg_accept_ratio), sizeof(record.fg_accept_ratio));
++}
++
++std::vector<TitleBudgetHistory> LoadAll() {
++    const auto path = StorePath();
++    std::error_code ec;
++    const u64 size = std::filesystem::file_size(path, ec);
++    if (ec) {
++        return {};
++    }
++    if (size < HeaderBytes || size > MaxFileBytes) {
++        Common::FS::RemoveFile(path);
++        return {};
++    }
++    try {
++        std::ifstream file(path, std::ios::binary);
++        file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
++        std::array<char, 8> magic{};
++        u32 version{};
++        u32 count{};
++        file.read(magic.data(), magic.size());
++        file.read(reinterpret_cast<char*>(&version), sizeof(version));
++        file.read(reinterpret_cast<char*>(&count), sizeof(count));
++        if (magic != Magic || version != Version || count > MaxRecords ||
++            size != HeaderBytes + count * SerializedRecordBytes) {
++            file.close();
++            Common::FS::RemoveFile(path);
++            return {};
++        }
++        std::vector<TitleBudgetHistory> records(count);
++        for (auto& record : records) {
++            ReadRecord(file, record);
++            if (!Valid(record)) {
++                file.close();
++                Common::FS::RemoveFile(path);
++                return {};
++            }
++        }
++        return records;
++    } catch (const std::ios_base::failure&) {
++        Common::FS::RemoveFile(path);
++        return {};
++    }
++}
++
++void SaveAll(std::vector<TitleBudgetHistory> records) {
++    std::ranges::sort(records, std::greater{}, &TitleBudgetHistory::last_used_unix_seconds);
++    if (records.size() > MaxRecords) {
++        records.resize(MaxRecords);
++    }
++    const auto path = StorePath();
++    const auto temporary = path.string() + ".tmp";
++    Common::FS::CreateDir(path.parent_path());
++    try {
++        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
++        file.exceptions(std::ofstream::failbit | std::ofstream::badbit);
++        const u32 count = static_cast<u32>(records.size());
++        file.write(Magic.data(), Magic.size());
++        file.write(reinterpret_cast<const char*>(&Version), sizeof(Version));
++        file.write(reinterpret_cast<const char*>(&count), sizeof(count));
++        for (const auto& record : records) {
++            WriteRecord(file, record);
++        }
++        file.flush();
++        file.close();
++        Common::FS::RemoveFile(path);
++        if (!Common::FS::RenameFile(temporary, path)) {
++            Common::FS::RemoveFile(temporary);
++        }
++    } catch (const std::ios_base::failure&) {
++        Common::FS::RemoveFile(temporary);
++    }
++}
++
++} // namespace
++
++std::optional<TitleBudgetHistory> LoadTitleBudgetHistory(u64 title_id) {
++    if (title_id == 0) {
++        return std::nullopt;
++    }
++    std::scoped_lock lock{store_mutex};
++    auto records = LoadAll();
++    const auto it = std::ranges::find(records, title_id, &TitleBudgetHistory::title_id);
++    return it != records.end() ? std::optional{*it} : std::nullopt;
++}
++
++void SaveTitleBudgetHistory(const TitleBudgetHistory& history) {
++    if (!Valid(history)) {
++        return;
++    }
++    std::scoped_lock lock{store_mutex};
++    auto records = LoadAll();
++    const auto it = std::ranges::find(records, history.title_id, &TitleBudgetHistory::title_id);
++    if (it != records.end()) {
++        *it = history;
++    } else {
++        records.push_back(history);
++    }
++    SaveAll(std::move(records));
++}
++
++void ResetTitleBudgetHistory(u64 title_id) {
++    std::scoped_lock lock{store_mutex};
++    auto records = LoadAll();
++    std::erase_if(records, [title_id](const auto& record) { return record.title_id == title_id; });
++    SaveAll(std::move(records));
++}
++
++} // namespace Common::Android::X7Pro
+diff --git a/src/common/android/x7pro_budget_store.h b/src/common/android/x7pro_budget_store.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..441fdb4fae0335ce02f2913ef8857667168f7881
+--- /dev/null
++++ b/src/common/android/x7pro_budget_store.h
+@@ -0,0 +1,29 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <optional>
++
++#include "common/common_types.h"
++
++namespace Common::Android::X7Pro {
++
++struct TitleBudgetHistory {
++    u64 title_id{};
++    u64 last_used_unix_seconds{};
++    u32 sessions{};
++    u32 real_samples{};
++    float real_average_ms{};
++    float gpu_average_ms{};
++    float deadline_miss_ratio{};
++    float fg_accept_ratio{};
++};
++
++// A versioned 32-title LRU file. Invalid, stale-version, oversized, and non-finite data is reset;
++// no persisted value can enable a Vulkan path or bypass fresh-frame warmup.
++[[nodiscard]] std::optional<TitleBudgetHistory> LoadTitleBudgetHistory(u64 title_id);
++void SaveTitleBudgetHistory(const TitleBudgetHistory& history);
++void ResetTitleBudgetHistory(u64 title_id);
++
++} // namespace Common::Android::X7Pro
+diff --git a/src/common/android/x7pro_governor.h b/src/common/android/x7pro_governor.h
+index 4db5b6f19621698178e62608c18e780222a39d3f..eb01c09f9f3b8a418e2fd9b569b4b9e78b783d97 100644
+--- a/src/common/android/x7pro_governor.h
++++ b/src/common/android/x7pro_governor.h
+@@ -119,6 +119,141 @@ public:
+     }
+ };
+ 
++enum class BudgetPhase : uint8_t { Warming, Headroom, Stable, Guarded, Critical, Thermal };
++
++inline constexpr const char* BudgetPhaseName(BudgetPhase phase) {
++    switch (phase) {
++    case BudgetPhase::Warming: return "WARMING";
++    case BudgetPhase::Headroom: return "HEADROOM";
++    case BudgetPhase::Stable: return "STABLE";
++    case BudgetPhase::Guarded: return "GUARDED";
++    case BudgetPhase::Critical: return "CRITICAL";
++    case BudgetPhase::Thermal: return "THERMAL";
++    }
++    return "UNKNOWN";
++}
++
++enum class BudgetWork : uint8_t {
++    FrameGeneration,
++    SpeculativeWarmup,
++    CacheMaintenance,
++    NoncriticalTransfer,
++    OptionalRendererWork,
++};
++
++struct RealFrameBudgetEvidence {
++    double latest_ms{};
++    double p95_ms{};
++    double p99_ms{};
++    double gpu_p95_ms{};
++    double cpu_p95_ms{};
++    double present_p95_ms{};
++    bool enough_real_samples{};
++    bool gpu_valid{};
++    bool cpu_valid{};
++    int thermal{-1};
++};
++
++struct RealFrameBudgetDecision {
++    BudgetPhase phase{BudgetPhase::Warming};
++    double target_ms{1000.0 / 30.0};
++    double estimated_headroom_ms{};
++    bool allow_frame_generation{};
++    bool allow_speculative_warmup{};
++    bool allow_cache_maintenance{};
++    bool allow_noncritical_transfer{};
++    bool allow_optional_renderer_work{};
++
++    [[nodiscard]] bool Allows(BudgetWork work) const {
++        switch (work) {
++        case BudgetWork::FrameGeneration: return allow_frame_generation;
++        case BudgetWork::SpeculativeWarmup: return allow_speculative_warmup;
++        case BudgetWork::CacheMaintenance: return allow_cache_maintenance;
++        case BudgetWork::NoncriticalTransfer: return allow_noncritical_transfer;
++        case BudgetWork::OptionalRendererWork: return allow_optional_renderer_work;
++        }
++        return false;
++    }
++};
++
++// Central 30 Hz real-frame controller. It never changes emulation speed or image scale. Pressure
++// transitions are fast, while recovery requires sustained evidence so optional work cannot flap.
++class RealFrameBudgetController {
++public:
++    static constexpr double TargetMs = 1000.0 / 30.0;
++
++    RealFrameBudgetDecision Update(const RealFrameBudgetEvidence& e) {
++        const double critical_path = std::max(e.gpu_p95_ms, e.cpu_p95_ms);
++        const double estimated_cost = critical_path + std::max(0.0, e.present_p95_ms);
++        decision.estimated_headroom_ms = std::clamp(TargetMs - estimated_cost, -TargetMs, TargetMs);
++
++        BudgetPhase candidate = BudgetPhase::Warming;
++        if (e.thermal >= 3) {
++            candidate = BudgetPhase::Thermal;
++        } else if (!e.enough_real_samples || !e.gpu_valid || !e.cpu_valid) {
++            candidate = BudgetPhase::Warming;
++        } else if (e.latest_ms > 38.0 || e.p95_ms > 34.0 || e.p99_ms > 45.0) {
++            candidate = BudgetPhase::Critical;
++        } else if (e.p95_ms > 31.5 || e.p99_ms > 38.0 ||
++                   decision.estimated_headroom_ms < 4.0) {
++            candidate = BudgetPhase::Guarded;
++        } else if (e.p95_ms < 30.0 && e.p99_ms < 35.0 &&
++                   decision.estimated_headroom_ms >= 6.0) {
++            candidate = BudgetPhase::Headroom;
++        } else {
++            candidate = BudgetPhase::Stable;
++        }
++
++        const auto severity = [](BudgetPhase phase) {
++            switch (phase) {
++            case BudgetPhase::Headroom: return 0;
++            case BudgetPhase::Stable: return 1;
++            case BudgetPhase::Warming: return 2;
++            case BudgetPhase::Guarded: return 3;
++            case BudgetPhase::Critical: return 4;
++            case BudgetPhase::Thermal: return 5;
++            }
++            return 5;
++        };
++        if (candidate == BudgetPhase::Thermal || severity(candidate) > severity(decision.phase)) {
++            // Thermal is immediate. Other pressure needs only two frames to reject one-off jitter.
++            pressure_streak = candidate == BudgetPhase::Thermal ? 2U : pressure_streak + 1;
++            recovery_streak = 0;
++            if (pressure_streak >= 2) decision.phase = candidate;
++        } else if (severity(candidate) < severity(decision.phase)) {
++            pressure_streak = 0;
++            if (++recovery_streak >= 45) {
++                decision.phase = candidate;
++                recovery_streak = 0;
++            }
++        } else {
++            pressure_streak = recovery_streak = 0;
++            decision.phase = candidate;
++        }
++
++        const bool headroom = decision.phase == BudgetPhase::Headroom;
++        const bool stable = decision.phase == BudgetPhase::Stable;
++        decision.allow_frame_generation = headroom || stable;
++        decision.allow_speculative_warmup = headroom && decision.estimated_headroom_ms >= 8.0;
++        decision.allow_cache_maintenance = headroom && decision.estimated_headroom_ms >= 6.0;
++        decision.allow_noncritical_transfer = headroom;
++        decision.allow_optional_renderer_work = headroom;
++        return decision;
++    }
++
++    void Reset() {
++        decision = {};
++        pressure_streak = recovery_streak = 0;
++    }
++
++    [[nodiscard]] const RealFrameBudgetDecision& Current() const { return decision; }
++
++private:
++    RealFrameBudgetDecision decision{};
++    unsigned pressure_streak{};
++    unsigned recovery_streak{};
++};
++
+ inline uint64_t TimestampDelta(uint64_t begin, uint64_t end, unsigned valid_bits) {
+     if (!valid_bits) return 0;
+     const uint64_t mask = valid_bits >= 64 ? ~uint64_t{0} : (uint64_t{1} << valid_bits) - 1;
+diff --git a/src/common/android/x7pro_telemetry.cpp b/src/common/android/x7pro_telemetry.cpp
+index 496d1d91b64c92a28b1a182b2f6003e022448a7f..d907429ad76d41026cc35f179f31e57847b98bf9 100644
+--- a/src/common/android/x7pro_telemetry.cpp
++++ b/src/common/android/x7pro_telemetry.cpp
+@@ -4,10 +4,13 @@
+ #include <atomic>
+ #include <dlfcn.h>
+ #include <iomanip>
++#include <limits>
+ #include <mutex>
++#include <optional>
+ #include <sstream>
+ #include <time.h>
+ #include "common/android/poco_x7pro_profile.h"
++#include "common/android/x7pro_budget_store.h"
+ #include "common/logging.h"
+ #include "common/settings.h"
+ 
+@@ -40,6 +43,8 @@ struct State {
+     double interval_compile_ms{}, interval_compile_max{}, previous_compile_ms{}, previous_compile_max{};
+     uint64_t interval_compile_events{}, previous_compile_events{};
+     Governor governor;
++    RealFrameBudgetController budget;
++    std::optional<TitleBudgetHistory> prior_history;
+     bool reduced{true};
+     std::string game, gpu_reason{"waiting for asynchronous timestamp results"};
+     std::string gpu, driver;
+@@ -108,14 +113,24 @@ void SetDevice(std::string_view gpu, std::string_view driver) {
+     auto& s = Get(); std::scoped_lock lock{s.mutex}; s.gpu = gpu; s.driver = driver;
+ }
+ void StartSession(std::string_view game, uint64_t title_id) {
+-    const bool active = IsPocoX7ProProfileActive() && (Settings::values.mali_native_frame_gen.GetValue() ||
+-        Settings::values.x7pro_detailed_performance_overlay.GetValue());
++    // The budget controller is always active on the positively identified target; overlay and FG
++    // visibility settings must not determine whether real-frame protection exists.
++    const bool active = IsPocoX7ProProfileActive();
++    const auto prior_history = active ? LoadTitleBudgetHistory(title_id) : std::nullopt;
+     auto& s = Get();
+     if (active) s.InitializeThermal();
+     std::scoped_lock lock{s.mutex};
+     s.metrics = {}; s.real = {}; s.presented = {}; s.counters = {}; s.drops = {};
+-    s.bottlenecks = {}; s.governor = {}; s.last_real = {}; s.last_present = {}; s.last_gpu = {};
++    s.bottlenecks = {}; s.governor = {}; s.budget.Reset(); s.last_real = {}; s.last_present = {}; s.last_gpu = {};
+     s.start = s.last_log = Clock::now(); s.game = game; s.title_id = title_id;
++    s.prior_history = prior_history;
++    if (prior_history && prior_history->real_samples >= 30 &&
++        prior_history->deadline_miss_ratio >= 0.10f) {
++        // Persisted evidence can only make startup more conservative; fresh samples are still
++        // mandatory before optional work becomes eligible.
++        s.governor.cooldown = 120;
++        s.governor.suspension_reason = Drop::RealDeadline;
++    }
+     s.last_compile = {}; s.last_spike = {};
+     s.interval_compile_ms = s.interval_compile_max = s.previous_compile_ms = s.previous_compile_max = 0;
+     s.interval_compile_events = s.previous_compile_events = 0;
+@@ -124,12 +139,53 @@ void StartSession(std::string_view game, uint64_t title_id) {
+     enabled = active;
+ }
+ void StopSession() {
+-    if (Enabled()) LOG_INFO(Render_Vulkan, "[X7PRO-B19-SUMMARY]\n{}", Diagnostics(true));
++    if (!Enabled()) {
++        enabled = false;
++        return;
++    }
++    LOG_INFO(Render_Vulkan, "[X7PRO-B21-SUMMARY]\n{}", Diagnostics(true));
++    std::optional<TitleBudgetHistory> history;
++    {
++        auto& s = Get();
++        std::scoped_lock lock{s.mutex};
++        if (s.title_id != 0 && s.real.total_count != 0) {
++            size_t deadline_misses = 0;
++            for (size_t i = 0; i < s.real.count; ++i) {
++                deadline_misses += s.real.values[i] > RealFrameBudgetController::TargetMs ? 1 : 0;
++            }
++            const u64 attempted = s.counters[static_cast<size_t>(Counter::Attempted)];
++            const u64 submitted = s.counters[static_cast<size_t>(Counter::Submitted)];
++            history = TitleBudgetHistory{
++                .title_id = s.title_id,
++                .last_used_unix_seconds = static_cast<u64>(
++                    std::chrono::duration_cast<std::chrono::seconds>(
++                        std::chrono::system_clock::now().time_since_epoch())
++                        .count()),
++                .sessions = s.prior_history ? s.prior_history->sessions + 1 : 1,
++                .real_samples = static_cast<u32>(
++                    std::min<u64>(s.real.total_count, std::numeric_limits<u32>::max())),
++                .real_average_ms = static_cast<float>(s.real.total / s.real.total_count),
++                .gpu_average_ms = M(s, Metric::GpuReal).total_count
++                                      ? static_cast<float>(M(s, Metric::GpuReal).total /
++                                                           M(s, Metric::GpuReal).total_count)
++                                      : 0.0f,
++                .deadline_miss_ratio = s.real.count
++                                           ? static_cast<float>(deadline_misses) / s.real.count
++                                           : 0.0f,
++                .fg_accept_ratio = attempted
++                                       ? static_cast<float>(std::min(submitted, attempted)) /
++                                             attempted
++                                       : 0.0f,
++            };
++        }
++    }
+     enabled = false;
++    if (history) {
++        SaveTitleBudgetHistory(*history);
++    }
+ }
+ void RealFrame() {
+-    enabled = IsPocoX7ProProfileActive() && (Settings::values.mali_native_frame_gen.GetValue() ||
+-        Settings::values.x7pro_detailed_performance_overlay.GetValue());
++    enabled = IsPocoX7ProProfileActive();
+     if (!Enabled()) return;
+     auto& s = Get();
+     bool log = false, spike = false;
+@@ -139,7 +195,12 @@ void RealFrame() {
+         if (s.last_real != Clock::time_point{}) {
+             const double ms = std::chrono::duration<double, std::milli>(now - s.last_real).count();
+             // Pauses/surface loss are not gameplay frame samples. Re-warm the governor.
+-            if (ms < 500) s.real.Add(ms); else s.governor = {};
++            if (ms < 500) {
++                s.real.Add(ms);
++            } else {
++                s.governor = {};
++                s.budget.Reset();
++            }
+             if (ms > 40 && ms < 500 && Age(s.last_spike) >= 1000) {
+                 spike = true; s.last_spike = now;
+             }
+@@ -155,6 +216,23 @@ void RealFrame() {
+         }
+         if (seen) { M(s, Metric::CpuSum).Add(sum); M(s, Metric::CpuCore).Add(maximum); }
+         s.thermal = thermal_status.load(std::memory_order_relaxed);
++        const double latest_real =
++            s.real.count ? s.real.values[(s.real.next + s.real.values.size() - 1) %
++                                         s.real.values.size()]
++                         : 0.0;
++        s.budget.Update({
++            .latest_ms = latest_real,
++            .p95_ms = s.real.Percentile(.95),
++            .p99_ms = s.real.Percentile(.99),
++            .gpu_p95_ms = M(s, Metric::GpuReal).Percentile(.95),
++            .cpu_p95_ms = M(s, Metric::CpuCore).Percentile(.95),
++            .present_p95_ms = M(s, Metric::Acquire).Percentile(.95) +
++                              M(s, Metric::PresentCall).Percentile(.95),
++            .enough_real_samples = s.real.count >= 30,
++            .gpu_valid = M(s, Metric::GpuReal).count >= 30 && Age(s.last_gpu) < 500,
++            .cpu_valid = M(s, Metric::CpuCore).count >= 30,
++            .thermal = s.thermal,
++        });
+         ++s.bottlenecks[Bottleneck(s)];
+         log = Age(s.last_log) >= 10000;
+         if (log) {
+@@ -197,6 +275,20 @@ Decision Admit(bool queue_ready) {
+     if (!Enabled() || !Settings::values.mali_native_frame_gen.GetValue()) return {};
+     auto& s = Get(); std::scoped_lock lock{s.mutex};
+     ++s.counters[static_cast<size_t>(Counter::Attempted)];
++    const auto& budget = s.budget.Current();
++    if (!budget.allow_frame_generation) {
++        const Drop reason = budget.phase == BudgetPhase::Thermal
++                                ? Drop::Thermal
++                                : budget.phase == BudgetPhase::Critical
++                                      ? Drop::RealDeadline
++                                      : Drop::Budget;
++        ++s.drops[static_cast<size_t>(reason)];
++        ++s.counters[static_cast<size_t>(Counter::Dropped)];
++        s.governor.phase = Phase::Constrained;
++        s.governor.suspension_reason = reason;
++        s.reduced = true;
++        return {false, reason, true};
++    }
+     Evidence e{
+         .real_ms = s.real.count ? s.real.values[(s.real.next + 299) % 300] : 0,
+         .real_p95 = s.real.Percentile(.95), .real_p99 = s.real.Percentile(.99),
+@@ -217,6 +309,17 @@ Decision Admit(bool queue_ready) {
+     }
+     return decision;
+ }
++bool AllowWork(BudgetWork work) {
++    if (!Enabled()) return true;
++    auto& s = Get();
++    std::scoped_lock lock{s.mutex};
++    return s.budget.Current().Allows(work);
++}
++RealFrameBudgetDecision CurrentBudget() {
++    auto& s = Get();
++    std::scoped_lock lock{s.mutex};
++    return s.budget.Current();
++}
+ bool ReducedQuality() { auto& s = Get(); std::scoped_lock lock{s.mutex}; return s.reduced; }
+ void Presented(bool synthetic) {
+     if (!Enabled()) return;
+@@ -240,7 +343,18 @@ std::string Diagnostics(bool detailed) {
+     if (!M(s, Metric::GpuReal).count) out << " (" << s.gpu_reason << ')';
+     out << "\nAcquire / frame wait: " << Value(M(s, Metric::Acquire)) << " / " << Value(M(s, Metric::FrameWait))
+         << "\nShader / pipeline: " << M(s, Metric::Shader).total_count << " / " << M(s, Metric::Pipeline).total_count
+-        << " events (CPU wall)\nFG: " << (Settings::values.mali_native_frame_gen.GetValue() ? PhaseName(s.governor.phase) : "OFF")
++        << " events (CPU wall)\nReal-frame budget: "
++        << BudgetPhaseName(s.budget.Current().phase)
++        << " target=" << s.budget.Current().target_ms << " ms headroom="
++        << s.budget.Current().estimated_headroom_ms << " ms"
++        << " | work FG/warmup/cache/transfer/optional="
++        << s.budget.Current().allow_frame_generation << '/'
++        << s.budget.Current().allow_speculative_warmup << '/'
++        << s.budget.Current().allow_cache_maintenance << '/'
++        << s.budget.Current().allow_noncritical_transfer << '/'
++        << s.budget.Current().allow_optional_renderer_work
++        << " | dynamic-resolution=OFF (sensitivity unproven)"
++        << "\nFG: " << (Settings::values.mali_native_frame_gen.GetValue() ? PhaseName(s.governor.phase) : "OFF")
+         << " | margin " << s.governor.margin << " ms"
+         << "\nFG CPU / GPU: " << Value(M(s, Metric::FgCpu)) << " / " << Value(M(s, Metric::FgGpu))
+         << "\nPresented submissions: ";
+@@ -257,6 +371,17 @@ std::string Diagnostics(bool detailed) {
+         << " driver=" << s.driver;
+     out << "\nGame=" << s.game << " title_id=" << std::hex << s.title_id << std::dec
+         << " duration_wall_s=" << Age(s.start) / 1000;
++    if (s.prior_history) {
++        out << "\nPer-title prior: sessions=" << s.prior_history->sessions
++            << " samples=" << s.prior_history->real_samples
++            << " real_avg_ms=" << s.prior_history->real_average_ms
++            << " gpu_avg_ms=" << s.prior_history->gpu_average_ms
++            << " deadline_miss_ratio=" << s.prior_history->deadline_miss_ratio
++            << " fg_accept_ratio=" << s.prior_history->fg_accept_ratio;
++    } else {
++        out << "\nPer-title prior: N/A (new/reset/version-mismatched history)";
++    }
++    out << "\nPer-title store: version=1 max_titles=32; persisted evidence can only restrict startup.";
+     if (s.real.total > 0) out << " real_average_active_fps=" << 1000 * s.real.total_count / s.real.total;
+     out << "\nPercentiles: nearest rank, rolling <=300 samples; 1% low = reciprocal slowest ceil(1%) mean."
+         << "\nCompile previous ~10s: events=" << s.previous_compile_events << " total_ms="
+diff --git a/src/common/android/x7pro_telemetry.h b/src/common/android/x7pro_telemetry.h
+index daf9989d8758e9df8c2c791a46e5a30e42e6a22b..943bcce5e68974ed268436fb305de1d93ab8d433 100644
+--- a/src/common/android/x7pro_telemetry.h
++++ b/src/common/android/x7pro_telemetry.h
+@@ -23,6 +23,8 @@ void Count(Counter counter);
+ void Rejected(Drop reason);
+ void GpuUnavailable(std::string_view reason);
+ Decision Admit(bool queue_ready);
++bool AllowWork(BudgetWork work);
++RealFrameBudgetDecision CurrentBudget();
+ bool ReducedQuality();
+ void Presented(bool synthetic);
+ std::string Diagnostics(bool detailed = false);
+diff --git a/src/common/settings.h b/src/common/settings.h
+index ffe58203813c92fd325e4e9b2a348efa7219534e..c55753c2a7f05d0a1185d783028e39388ddd74f9 100644
+--- a/src/common/settings.h
++++ b/src/common/settings.h
+@@ -507,6 +507,18 @@ struct Values {
+         linkage, false, "mali_native_frame_gen_debug_overlay", Category::Renderer,
+         Specialization::Default, true, false, &mali_native_frame_gen};
+ 
++    // Architecture policy is evaluated from Vulkan physical-device properties. Auto enables only
++    // capability-checked G720 paths; Aggressive remains Vulkan-valid and never invents extensions.
++    SwitchableSetting<u32, true> mali_renderer_optimization{linkage,
++                                                            1,
++                                                            0,
++                                                            2,
++                                                            "mali_renderer_optimization",
++                                                            Category::Renderer,
++                                                            Specialization::Countable,
++                                                            true,
++                                                            false};
++
+     // Persisted controls for the POCO X7 Pro Android flavor. They are consumed by the Android
+     // profile at runtime; selecting the target mode never invents unsupported Vulkan features.
+     SwitchableSetting<u32, true> x7pro_hardware_optimization{linkage,
+diff --git a/src/video_core/CMakeLists.txt b/src/video_core/CMakeLists.txt
+index 1da129a17bd0fb2ec6c141dfc613e96e23cdd890..f1a5fc9c9e573dc8e2ba05db6e7bf66eebbb1358 100644
+--- a/src/video_core/CMakeLists.txt
++++ b/src/video_core/CMakeLists.txt
+@@ -191,6 +191,7 @@ add_library(video_core STATIC
+     renderer_vulkan/vk_staging_buffer_pool.h
+     renderer_vulkan/vk_state_tracker.cpp
+     renderer_vulkan/vk_state_tracker.h
++    renderer_vulkan/vk_sync_optimizer.h
+     renderer_vulkan/vk_swapchain.cpp
+     renderer_vulkan/vk_swapchain.h
+     renderer_vulkan/vk_texture_cache.cpp
+@@ -204,6 +205,8 @@ add_library(video_core STATIC
+     vulkan_common/vulkan_debug_callback.h
+     vulkan_common/vulkan_device.cpp
+     vulkan_common/vulkan_device.h
++    vulkan_common/vulkan_gpu_profile.cpp
++    vulkan_common/vulkan_gpu_profile.h
+     vulkan_common/vulkan_instance.cpp
+     vulkan_common/vulkan_instance.h
+     vulkan_common/vulkan_library.cpp
+diff --git a/src/video_core/gpu_logging/CMakeLists.txt b/src/video_core/gpu_logging/CMakeLists.txt
+index 9a9f1e5f8dbe44e8a8cb174651d8e875fa97e29c..64358a9b91a1c76cbabc995d409e2de41fdedaa9 100644
+--- a/src/video_core/gpu_logging/CMakeLists.txt
++++ b/src/video_core/gpu_logging/CMakeLists.txt
+@@ -2,8 +2,12 @@
+ # SPDX-License-Identifier: GPL-3.0-or-later
+ 
+ add_library(gpu_logging STATIC
++    gpu_flight_recorder.cpp
++    gpu_flight_recorder.h
+     gpu_logging.cpp
+     gpu_logging.h
++    gpu_renderer_diagnostics.cpp
++    gpu_renderer_diagnostics.h
+     gpu_state_capture.cpp
+     gpu_state_capture.h
+     qualcomm_debug.cpp
+diff --git a/src/video_core/gpu_logging/gpu_flight_recorder.cpp b/src/video_core/gpu_logging/gpu_flight_recorder.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..db8f9cb2f3ead7dac58d55f362c188c0ee5f2d01
+--- /dev/null
++++ b/src/video_core/gpu_logging/gpu_flight_recorder.cpp
+@@ -0,0 +1,128 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++
++#include <algorithm>
++#include <chrono>
++
++#include <fmt/format.h>
++
++#include "common/fs/file.h"
++#include "common/fs/fs.h"
++#include "common/fs/path_util.h"
++
++namespace GPU::Logging {
++namespace {
++
++std::string_view EventName(FlightEvent event) {
++    switch (event) {
++    case FlightEvent::DeviceProfile:
++        return "device-profile";
++    case FlightEvent::Submit:
++        return "submit";
++    case FlightEvent::PresentCopy:
++        return "present-copy";
++    case FlightEvent::PresentBlit:
++        return "present-blit";
++    case FlightEvent::PipelineHit:
++        return "pipeline-hit";
++    case FlightEvent::PipelineMiss:
++        return "pipeline-miss";
++    case FlightEvent::DescriptorWrite:
++        return "descriptor-write";
++    case FlightEvent::DescriptorReuse:
++        return "descriptor-reuse";
++    case FlightEvent::OptimizedBarrier:
++        return "optimized-barrier";
++    case FlightEvent::GenericBarrier:
++        return "generic-barrier";
++    case FlightEvent::AppletReadback:
++        return "applet-readback";
++    case FlightEvent::BudgetState:
++        return "budget-state";
++    case FlightEvent::DeviceLost:
++        return "device-lost";
++    }
++    return "unknown";
++}
++
++} // namespace
++
++FlightRecorder& FlightRecorder::Get() {
++    static FlightRecorder recorder;
++    return recorder;
++}
++
++void FlightRecorder::Record(FlightEvent event, u64 arg0, u64 arg1, u64 arg2) noexcept {
++    const u64 sequence = next_sequence.fetch_add(1, std::memory_order_relaxed);
++    Slot& slot = slots[sequence % Capacity];
++    // Zero means unpublished. Atomic fields avoid a data race if a crash snapshot overlaps a writer.
++    slot.sequence.store(0, std::memory_order_relaxed);
++    const auto now = std::chrono::steady_clock::now().time_since_epoch();
++    slot.timestamp_ns.store(
++        static_cast<u64>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count()),
++        std::memory_order_relaxed);
++    slot.event.store(static_cast<u32>(event), std::memory_order_relaxed);
++    slot.arg0.store(arg0, std::memory_order_relaxed);
++    slot.arg1.store(arg1, std::memory_order_relaxed);
++    slot.arg2.store(arg2, std::memory_order_relaxed);
++    slot.sequence.store(sequence, std::memory_order_release);
++}
++
++std::vector<FlightEntry> FlightRecorder::Snapshot() const {
++    std::vector<FlightEntry> entries;
++    entries.reserve(Capacity);
++    for (const Slot& slot : slots) {
++        const u64 before = slot.sequence.load(std::memory_order_acquire);
++        if (before == 0) {
++            continue;
++        }
++        FlightEntry entry{
++            .sequence = before,
++            .timestamp_ns = slot.timestamp_ns.load(std::memory_order_relaxed),
++            .event = static_cast<FlightEvent>(slot.event.load(std::memory_order_relaxed)),
++            .arg0 = slot.arg0.load(std::memory_order_relaxed),
++            .arg1 = slot.arg1.load(std::memory_order_relaxed),
++            .arg2 = slot.arg2.load(std::memory_order_relaxed),
++        };
++        if (slot.sequence.load(std::memory_order_acquire) == before) {
++            entries.push_back(entry);
++        }
++    }
++    std::ranges::sort(entries, {}, &FlightEntry::sequence);
++    return entries;
++}
++
++std::string FlightRecorder::FormatSnapshot() const {
++    std::string output = "=== EDEN VULKAN FLIGHT RECORDER (bounded 256 events) ===\n";
++    for (const FlightEntry& entry : Snapshot()) {
++        output += fmt::format("{} {} ns={} args={},{},{}\n", entry.sequence,
++                              EventName(entry.event), entry.timestamp_ns, entry.arg0, entry.arg1,
++                              entry.arg2);
++    }
++    return output;
++}
++
++void FlightRecorder::DumpOnce(std::string_view reason) noexcept {
++    if (dumped.test_and_set(std::memory_order_acq_rel)) {
++        return;
++    }
++    try {
++        Record(FlightEvent::DeviceLost);
++        const auto directory = Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir) / "gpu_crashes";
++        Common::FS::CreateDir(directory);
++        Common::FS::IOFile file(directory / "vulkan_flight_recorder.gpu-dump",
++                                Common::FS::FileAccessMode::Write,
++                                Common::FS::FileType::TextFile);
++        if (!file.IsOpen()) {
++            return;
++        }
++        file.WriteString(fmt::format("Reason: {}\n{}", reason, FormatSnapshot()));
++        file.Flush();
++    } catch (...) {
++        // A recorder must never turn a recoverable device-lost path into another exception.
++    }
++}
++
++} // namespace GPU::Logging
+diff --git a/src/video_core/gpu_logging/gpu_flight_recorder.h b/src/video_core/gpu_logging/gpu_flight_recorder.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..5d398f8fb8abf0b51e5072e64c6fc9db404e4ef1
+--- /dev/null
++++ b/src/video_core/gpu_logging/gpu_flight_recorder.h
+@@ -0,0 +1,76 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <array>
++#include <atomic>
++#include <string>
++#include <string_view>
++#include <vector>
++
++#include "common/common_types.h"
++
++namespace GPU::Logging {
++
++// Always-on, allocation-free recording for renderer failure triage. This intentionally records
++// compact numeric facts rather than Vulkan object ownership or guest data.
++enum class FlightEvent : u32 {
++    DeviceProfile,
++    Submit,
++    PresentCopy,
++    PresentBlit,
++    PipelineHit,
++    PipelineMiss,
++    DescriptorWrite,
++    DescriptorReuse,
++    OptimizedBarrier,
++    GenericBarrier,
++    AppletReadback,
++    BudgetState,
++    DeviceLost,
++};
++
++struct FlightEntry {
++    u64 sequence{};
++    u64 timestamp_ns{};
++    FlightEvent event{};
++    u64 arg0{};
++    u64 arg1{};
++    u64 arg2{};
++};
++
++class FlightRecorder {
++public:
++    static constexpr size_t Capacity = 256;
++
++    static FlightRecorder& Get();
++
++    void Record(FlightEvent event, u64 arg0 = 0, u64 arg1 = 0, u64 arg2 = 0) noexcept;
++    [[nodiscard]] std::vector<FlightEntry> Snapshot() const;
++    [[nodiscard]] std::string FormatSnapshot() const;
++
++    // Writes one bounded, fixed-name report per process. Safe to call from each device-lost site.
++    void DumpOnce(std::string_view reason) noexcept;
++
++private:
++    struct Slot {
++        std::atomic<u64> sequence{};
++        std::atomic<u64> timestamp_ns{};
++        std::atomic<u32> event{};
++        std::atomic<u64> arg0{};
++        std::atomic<u64> arg1{};
++        std::atomic<u64> arg2{};
++    };
++
++    std::array<Slot, Capacity> slots{};
++    std::atomic<u64> next_sequence{1};
++    std::atomic_flag dumped = ATOMIC_FLAG_INIT;
++};
++
++inline void RecordFlight(FlightEvent event, u64 arg0 = 0, u64 arg1 = 0,
++                         u64 arg2 = 0) noexcept {
++    FlightRecorder::Get().Record(event, arg0, arg1, arg2);
++}
++
++} // namespace GPU::Logging
+diff --git a/src/video_core/gpu_logging/gpu_renderer_diagnostics.cpp b/src/video_core/gpu_logging/gpu_renderer_diagnostics.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..00e2a63632678545c7551f8e3759e50888d27136
+--- /dev/null
++++ b/src/video_core/gpu_logging/gpu_renderer_diagnostics.cpp
+@@ -0,0 +1,86 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
++
++#include <array>
++#include <atomic>
++
++#include <fmt/format.h>
++
++namespace GPU::Logging {
++namespace {
++
++constexpr size_t CounterCount = static_cast<size_t>(RendererCounter::Count);
++std::array<std::atomic<u64>, CounterCount> counters{};
++std::atomic<bool> active_profile{};
++std::atomic<u32> selected_policy{};
++std::atomic<u32> enabled_fast_paths{};
++
++const char* PolicyName(u32 policy) {
++    switch (policy) {
++    case 0:
++        return "Off";
++    case 1:
++        return "Auto";
++    case 2:
++        return "Aggressive";
++    default:
++        return "Unknown";
++    }
++}
++
++} // namespace
++
++void ConfigureRendererDiagnostics(bool profile_active, u32 policy, u32 fast_path_mask) noexcept {
++    active_profile.store(profile_active, std::memory_order_relaxed);
++    selected_policy.store(policy, std::memory_order_relaxed);
++    enabled_fast_paths.store(fast_path_mask, std::memory_order_relaxed);
++}
++
++void CountRenderer(RendererCounter counter, u64 amount) noexcept {
++    const size_t index = static_cast<size_t>(counter);
++    if (index < counters.size()) {
++        counters[index].fetch_add(amount, std::memory_order_relaxed);
++    }
++}
++
++u64 RendererCount(RendererCounter counter) noexcept {
++    const size_t index = static_cast<size_t>(counter);
++    return index < counters.size() ? counters[index].load(std::memory_order_relaxed) : 0;
++}
++
++std::string RendererDiagnosticsText() {
++    const u64 hits = RendererCount(RendererCounter::PipelineHit);
++    const u64 misses = RendererCount(RendererCounter::PipelineMiss);
++    const u64 lookups = hits + misses;
++    const std::string hit_rate =
++        lookups != 0 ? fmt::format("{:.1f}%", 100.0 * static_cast<double>(hits) / lookups)
++                     : "N/A";
++    return fmt::format(
++        "Vulkan profile: {} policy={} fast-path-mask=0x{:x}\n"
++        "Pipeline map (session): hit={} miss={} hit-rate={} created={} disk-loaded={}\n"
++        "Descriptor buffer (session): write={} reuse={}\n"
++        "Renderer commands (session): submit={} precise-barrier={} generic-barrier={} "
++        "tile-clear={} scope-continue={}\n"
++        "Present (session): copy={} blit={}\n"
++        "Applet readback (session): requests={} allocations={} reuses={}",
++        active_profile.load(std::memory_order_relaxed) ? "Mali-G720 ACTIVE" : "generic/inactive",
++        PolicyName(selected_policy.load(std::memory_order_relaxed)),
++        enabled_fast_paths.load(std::memory_order_relaxed), hits, misses, hit_rate,
++        RendererCount(RendererCounter::PipelineCreated),
++        RendererCount(RendererCounter::DiskPipelineLoaded),
++        RendererCount(RendererCounter::DescriptorBufferWrite),
++        RendererCount(RendererCounter::DescriptorBufferReuse),
++        RendererCount(RendererCounter::Submission),
++        RendererCount(RendererCounter::PreciseBarrier),
++        RendererCount(RendererCounter::GenericBarrier),
++        RendererCount(RendererCounter::TileLoadClear),
++        RendererCount(RendererCounter::RenderScopeContinuation),
++        RendererCount(RendererCounter::PresentCopy), RendererCount(RendererCounter::PresentBlit),
++        RendererCount(RendererCounter::AppletReadback),
++        RendererCount(RendererCounter::AppletDownloadAllocation),
++        RendererCount(RendererCounter::AppletDownloadReuse));
++}
++
++} // namespace GPU::Logging
+diff --git a/src/video_core/gpu_logging/gpu_renderer_diagnostics.h b/src/video_core/gpu_logging/gpu_renderer_diagnostics.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..2049be044f7dd51ea95db00f742e831bbc31d7db
+--- /dev/null
++++ b/src/video_core/gpu_logging/gpu_renderer_diagnostics.h
+@@ -0,0 +1,37 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <string>
++
++#include "common/common_types.h"
++
++namespace GPU::Logging {
++
++enum class RendererCounter : u32 {
++    PipelineHit,
++    PipelineMiss,
++    PipelineCreated,
++    DiskPipelineLoaded,
++    DescriptorBufferWrite,
++    DescriptorBufferReuse,
++    Submission,
++    PreciseBarrier,
++    GenericBarrier,
++    TileLoadClear,
++    RenderScopeContinuation,
++    PresentCopy,
++    PresentBlit,
++    AppletDownloadAllocation,
++    AppletDownloadReuse,
++    AppletReadback,
++    Count,
++};
++
++void ConfigureRendererDiagnostics(bool profile_active, u32 policy, u32 fast_path_mask) noexcept;
++void CountRenderer(RendererCounter counter, u64 amount = 1) noexcept;
++[[nodiscard]] u64 RendererCount(RendererCounter counter) noexcept;
++[[nodiscard]] std::string RendererDiagnosticsText();
++
++} // namespace GPU::Logging
+diff --git a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp
+index 23e4c21cb0d02d2dbe70b7781349c9ea06520606..5719261f51b4dd0bc1c15ebce3c8317be801cbce 100644
+--- a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp
++++ b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp
+@@ -22,7 +22,6 @@
+ namespace Vulkan {
+ namespace {
+ 
+-constexpr size_t MAX_IN_FLIGHT_SETS = 7;
+ constexpr VkFormat INPUT_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
+ constexpr VkFormat MOTION_FORMAT = VK_FORMAT_R16G16_SFLOAT;
+ constexpr VkFormat CONFIDENCE_FORMAT = VK_FORMAT_R8_UNORM;
+@@ -175,6 +174,8 @@ void MaliNativeFrameGen::Reset() {
+     motion = {};
+     confidence = {};
+     descriptor_sets = {};
++    motion_descriptor_history.fill(0xff);
++    interpolation_descriptor_history.fill(0xff);
+     descriptor_pool = {};
+     motion_pipeline = {};
+     interpolation_pipeline = {};
+@@ -220,7 +221,7 @@ void MaliNativeFrameGen::Rebuild(const Device& device, VkExtent2D new_extent) {
+     confidence.extent = motion_extent;
+ 
+     descriptor_pool = CreateWrappedDescriptorPool(
+-        device, MAX_IN_FLIGHT_SETS * 9, MAX_IN_FLIGHT_SETS * 2,
++        device, MaxInFlightSets * 9, MaxInFlightSets * 2,
+         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE});
+     motion_set_layout = CreateWrappedDescriptorSetLayout(
+         device, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+@@ -264,11 +265,11 @@ void MaliNativeFrameGen::Rebuild(const Device& device, VkExtent2D new_extent) {
+         CreateWrappedComputePipeline(device, interpolation_pipeline_layout, *interpolation_shader);
+ 
+     std::vector<VkDescriptorSetLayout> layouts;
+-    layouts.reserve(MAX_IN_FLIGHT_SETS * 2);
+-    for (size_t i = 0; i < MAX_IN_FLIGHT_SETS; ++i) {
++    layouts.reserve(MaxInFlightSets * 2);
++    for (size_t i = 0; i < MaxInFlightSets; ++i) {
+         layouts.push_back(*motion_set_layout);
+     }
+-    for (size_t i = 0; i < MAX_IN_FLIGHT_SETS; ++i) {
++    for (size_t i = 0; i < MaxInFlightSets; ++i) {
+         layouts.push_back(*interpolation_set_layout);
+     }
+     descriptor_sets = CreateWrappedDescriptorSets(descriptor_pool, layouts);
+@@ -404,15 +405,23 @@ bool MaliNativeFrameGen::GenerateInto(const Device& device, Frame* destination,
+     if (generated_frames == 0 || generation != 0 || !destination->storage_view) {
+         return false;
+     }
+-    if (destination->index >= MAX_IN_FLIGHT_SETS) {
++    if (destination->index >= MaxInFlightSets) {
+         Disable("generated-frame-index-out-of-range");
+         return false;
+     }
+     const size_t set_slot = destination->index; // Destination fence protects BOTH descriptor sets.
+     const VkDescriptorSet motion_set = descriptor_sets[set_slot];
+-    const VkDescriptorSet interpolation_set = descriptor_sets[MAX_IN_FLIGHT_SETS + destination->index];
+-    UpdateMotionDescriptors(device, motion_set);
+-    UpdateInterpolationDescriptors(device, interpolation_set, *destination->storage_view);
++    const VkDescriptorSet interpolation_set = descriptor_sets[MaxInFlightSets + set_slot];
++    // Descriptor sets are unique to this fence-protected slot. Rewrite only when history parity
++    // changes; the destination view is stable until swapchain recreation invokes Reset().
++    if (motion_descriptor_history[set_slot] != current_history) {
++        UpdateMotionDescriptors(device, motion_set);
++        motion_descriptor_history[set_slot] = static_cast<u8>(current_history);
++    }
++    if (interpolation_descriptor_history[set_slot] != current_history) {
++        UpdateInterpolationDescriptors(device, interpolation_set, *destination->storage_view);
++        interpolation_descriptor_history[set_slot] = static_cast<u8>(current_history);
++    }
+ 
+     QualityConfig quality = SelectQuality();
+     if (Common::Android::X7Pro::ReducedQuality()) quality.search_radius = 1;
+diff --git a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
+index 4703a7aada0f1f7dd65e7a9039a3321dfbb27340..8001b9ba928693ebcffe35b4c1bfd54b4e733ca2 100644
+--- a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
++++ b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
+@@ -31,6 +31,8 @@ public:
+     void Skip();
+ 
+ private:
++    static constexpr size_t MaxInFlightSets = 7;
++
+     struct Image {
+         vk::Image image;
+         vk::ImageView view;
+@@ -111,6 +113,8 @@ private:
+     vk::Pipeline motion_pipeline;
+     vk::Pipeline interpolation_pipeline;
+     vk::DescriptorSets descriptor_sets;
++    std::array<u8, MaxInFlightSets> motion_descriptor_history{};
++    std::array<u8, MaxInFlightSets> interpolation_descriptor_history{};
+ };
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/present/util.cpp b/src/video_core/renderer_vulkan/present/util.cpp
+index 2ea7870f01e4af6c44dc58bcef5cec106202f1d1..063bedcc6bded95d50628827e0dbd684e275b31e 100644
+--- a/src/video_core/renderer_vulkan/present/util.cpp
++++ b/src/video_core/renderer_vulkan/present/util.cpp
+@@ -196,13 +196,15 @@ vk::ImageView CreateWrappedImageView(const Device& device, vk::Image& image, VkF
+ }
+ 
+ vk::RenderPass CreateWrappedRenderPass(const Device& device, VkFormat format,
+-                                       VkImageLayout initial_layout) {
++                                       VkImageLayout initial_layout, bool clear_on_load) {
+     const VkAttachmentDescription attachment{
+         .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+         .format = format,
+         .samples = VK_SAMPLE_COUNT_1_BIT,
+-        .loadOp = initial_layout == VK_IMAGE_LAYOUT_UNDEFINED ? VK_ATTACHMENT_LOAD_OP_DONT_CARE
+-                                                              : VK_ATTACHMENT_LOAD_OP_LOAD,
++        .loadOp = clear_on_load ? VK_ATTACHMENT_LOAD_OP_CLEAR
++                                : initial_layout == VK_IMAGE_LAYOUT_UNDEFINED
++                                      ? VK_ATTACHMENT_LOAD_OP_DONT_CARE
++                                      : VK_ATTACHMENT_LOAD_OP_LOAD,
+         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+@@ -210,9 +212,11 @@ vk::RenderPass CreateWrappedRenderPass(const Device& device, VkFormat format,
+         .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+     };
+ 
+-    constexpr VkAttachmentReference color_attachment_ref{
++    const VkAttachmentReference color_attachment_ref{
+         .attachment = 0,
+-        .layout = VK_IMAGE_LAYOUT_GENERAL,
++        .layout = device.GetGpuPerformanceProfile().FastPaths().tile_attachment_layouts
++                      ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
++                      : VK_IMAGE_LAYOUT_GENERAL,
+     };
+ 
+     const VkSubpassDescription subpass_description{
+@@ -700,7 +704,7 @@ void ClearColorImage(vk::CommandBuffer& cmdbuf, VkImage image) {
+ }
+ 
+ void BeginRenderPass(vk::CommandBuffer& cmdbuf, VkRenderPass render_pass, VkFramebuffer framebuffer,
+-                     VkExtent2D extent) {
++                     VkExtent2D extent, const VkClearValue* clear_value) {
+     const VkRenderPassBeginInfo renderpass_bi{
+         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+         .pNext = nullptr,
+@@ -710,8 +714,8 @@ void BeginRenderPass(vk::CommandBuffer& cmdbuf, VkRenderPass render_pass, VkFram
+             .offset{},
+             .extent = extent,
+         },
+-        .clearValueCount = 0,
+-        .pClearValues = nullptr,
++        .clearValueCount = clear_value != nullptr ? 1U : 0U,
++        .pClearValues = clear_value,
+     };
+     cmdbuf.BeginRenderPass(renderpass_bi, VK_SUBPASS_CONTENTS_INLINE);
+ 
+diff --git a/src/video_core/renderer_vulkan/present/util.h b/src/video_core/renderer_vulkan/present/util.h
+index ecc263286d3c4758a7501ad7ddf6a2b057a6f534..a8de174cac03b9a9752672866462ba85b198f764 100644
+--- a/src/video_core/renderer_vulkan/present/util.h
++++ b/src/video_core/renderer_vulkan/present/util.h
+@@ -28,7 +28,8 @@ void ClearColorImage(vk::CommandBuffer& cmdbuf, VkImage image);
+ 
+ vk::ImageView CreateWrappedImageView(const Device& device, vk::Image& image, VkFormat format);
+ vk::RenderPass CreateWrappedRenderPass(const Device& device, VkFormat format,
+-                                       VkImageLayout initial_layout = VK_IMAGE_LAYOUT_GENERAL);
++                                       VkImageLayout initial_layout = VK_IMAGE_LAYOUT_GENERAL,
++                                       bool clear_on_load = false);
+ vk::Framebuffer CreateWrappedFramebuffer(const Device& device, vk::RenderPass& render_pass,
+                                          vk::ImageView& dest_image, VkExtent2D extent);
+ vk::Sampler CreateWrappedSampler(const Device& device, VkFilter filter = VK_FILTER_LINEAR);
+@@ -66,6 +67,6 @@ vk::Sampler CreateNearestNeighborSampler(const Device& device);
+ vk::Sampler CreateCubicSampler(const Device& device, VkCubicFilterWeightsQCOM qcom_weights);
+ 
+ void BeginRenderPass(vk::CommandBuffer& cmdbuf, VkRenderPass render_pass, VkFramebuffer framebuffer,
+-                     VkExtent2D extent);
++                     VkExtent2D extent, const VkClearValue* clear_value = nullptr);
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/present/window_adapt_pass.cpp b/src/video_core/renderer_vulkan/present/window_adapt_pass.cpp
+index 549b0660c15e7c86918e482d091dfce99e195ab0..ef63f392f4dd8d9fbb0acdf00fd0b0f1b3c4e9b3 100644
+--- a/src/video_core/renderer_vulkan/present/window_adapt_pass.cpp
++++ b/src/video_core/renderer_vulkan/present/window_adapt_pass.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "core/frontend/framebuffer_layout.h"
+ #include "video_core/framebuffer_config.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/host_shaders/vulkan_present_vert_spv.h"
+ #include "video_core/renderer_vulkan/present/layer.h"
+ #include "video_core/renderer_vulkan/present/present_push_constants.h"
+@@ -69,6 +70,11 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
+         layer_it++;
+     }
+ 
++    const bool tile_fast_clear =
++        device.GetGpuPerformanceProfile().FastPaths().tile_load_op_clear;
++    if (tile_fast_clear) {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::TileLoadClear);
++    }
+     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+         const f32 bg_red = Settings::values.bg_red.GetValue() / 255.0f;
+         const f32 bg_green = Settings::values.bg_green.GetValue() / 255.0f;
+@@ -91,8 +97,14 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
+             .layerCount = 1,
+         };
+ 
+-        BeginRenderPass(cmdbuf, renderpass, host_framebuffer, render_area);
+-        cmdbuf.ClearAttachments({clear_attachment}, {clear_rect});
++        // On G720, LOAD_OP_CLEAR is a tile-start clear and avoids a separate in-pass clear
++        // command. The generic path is intentionally unchanged.
++        const VkClearValue clear_value = clear_attachment.clearValue;
++        BeginRenderPass(cmdbuf, renderpass, host_framebuffer, render_area,
++                        tile_fast_clear ? &clear_value : nullptr);
++        if (!tile_fast_clear) {
++            cmdbuf.ClearAttachments({clear_attachment}, {clear_rect});
++        }
+ 
+         for (size_t i = 0; i < layer_count; i++) {
+             cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipelines[i]);
+@@ -143,7 +155,9 @@ void WindowAdaptPass::CreateVertexShader(const Device& device) {
+ }
+ 
+ void WindowAdaptPass::CreateRenderPass(const Device& device, VkFormat frame_format) {
+-    render_pass = CreateWrappedRenderPass(device, frame_format, VK_IMAGE_LAYOUT_UNDEFINED);
++    render_pass = CreateWrappedRenderPass(
++        device, frame_format, VK_IMAGE_LAYOUT_UNDEFINED,
++        device.GetGpuPerformanceProfile().FastPaths().tile_load_op_clear);
+ }
+ 
+ void WindowAdaptPass::CreatePipelines(const Device& device) {
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+index 2510ffaff06456cadc94afe246dbb934eccde63a..05d97d83ecedbd5ee5811707332f4446b68f6a71 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+@@ -26,6 +26,8 @@
+ #include "core/frontend/graphics_context.h"
+ #include "video_core/capture.h"
+ #include "video_core/gpu.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/present.h"
+ #include "video_core/renderer_vulkan/present/util.h"
+ #ifdef HAS_RESHADE
+@@ -386,21 +388,33 @@ std::vector<u8> RendererVulkan::GetAppletCaptureBuffer() {
+         return out;
+     }
+ 
+-    const auto dst_buffer =
+-        CreateWrappedBuffer(memory_allocator, VideoCore::Capture::TiledSize, MemoryUsage::Download);
++    // Capture dimensions are fixed. Keep one persistently mapped download allocation and retain
++    // the existing synchronous Finish/Invalidate ordering required by the applet API.
++    if (!applet_download_buffer) {
++        applet_download_buffer = CreateWrappedBuffer(
++            memory_allocator, VideoCore::Capture::TiledSize, MemoryUsage::Download);
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::AppletDownloadAllocation);
++    } else {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::AppletDownloadReuse);
++    }
++    GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::AppletReadback);
++    GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::AppletReadback,
++                               VideoCore::Capture::TiledSize);
+ 
+     scheduler.RequestOutsideRenderPassOperationContext();
+     scheduler.Record([&](vk::CommandBuffer cmdbuf) {
+-        DownloadColorImage(cmdbuf, *applet_frame.image, *dst_buffer, CaptureImageExtent);
++        DownloadColorImage(cmdbuf, *applet_frame.image, *applet_download_buffer,
++                           CaptureImageExtent);
+     });
+ 
+     // Ensure the copy is fully completed before writing the capture
+     scheduler.Finish();
+ 
+     // Swizzle image data to the capture buffer
+-    dst_buffer.Invalidate();
+-    Tegra::Texture::SwizzleTexture(out, dst_buffer.Mapped(), BytesPerPixel, LinearWidth,
+-                                   LinearHeight, LinearDepth, BlockHeight, BlockDepth);
++    applet_download_buffer.Invalidate();
++    Tegra::Texture::SwizzleTexture(out, applet_download_buffer.Mapped(), BytesPerPixel,
++                                   LinearWidth, LinearHeight, LinearDepth, BlockHeight,
++                                   BlockDepth);
+ 
+     return out;
+ }
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.h b/src/video_core/renderer_vulkan/renderer_vulkan.h
+index d1c1982f0b5ac2a9cd47f8725997bdf8e30fca68..603c6a0da705bd81a0f9ee894beb7e4fd23b086d 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.h
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.h
+@@ -111,6 +111,7 @@ private:
+     std::optional<TurboMode> turbo_mode;
+ 
+     Frame applet_frame;
++    vk::Buffer applet_download_buffer;
+ };
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp b/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp
+index 1ec206f5239affc6586ba93e8738223ceaf6ba5b..e8d704b2ded95e0b9d274e89c9dd601c27e49bdb 100644
+--- a/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp
++++ b/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp
+@@ -5,11 +5,14 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include <algorithm>
++#include <cstring>
+ #include <vector>
+ 
+ #include <boost/container/small_vector.hpp>
+ #include <fmt/format.h>
+ 
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/renderer_vulkan/pipeline_helper.h"
+ #include "video_core/renderer_vulkan/pipeline_statistics.h"
+ #include "video_core/renderer_vulkan/vk_buffer_cache.h"
+@@ -285,15 +288,44 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
+     VkDeviceSize descriptor_buffer_offset{};
+     u32 descriptor_buffer_chunk{};
+     if (uses_descriptor_buffer) {
+-        const DescriptorBufferRing::Allocation alloc{
+-            descriptor_buffer_ring.Allocate(scheduler, descriptor_buffer_layout.size)};
+-        if (!alloc.host) {
+-            LOG_DEBUG(Render_Vulkan, "Failed to reserve descriptor memory, skipping dispatch");
+-            return false;
++        const bool allow_reuse =
++            device.GetGpuPerformanceProfile().FastPaths().compute_descriptor_reuse;
++        const bool reuse_allocation =
++            allow_reuse &&
++            last_descriptor_buffer_generation == descriptor_buffer_ring.CurrentGeneration() &&
++            last_descriptor_payload.size() == num_descriptor_entries &&
++            std::memcmp(last_descriptor_payload.data(), descriptor_data,
++                        num_descriptor_entries * sizeof(DescriptorUpdateEntry)) == 0;
++        if (reuse_allocation) {
++            // The ring generation proves the bytes have not been recycled. TouchFrame extends the
++            // GPU lifetime exactly as the graphics descriptor reuse path does.
++            descriptor_buffer_offset = last_descriptor_buffer_offset;
++            descriptor_buffer_chunk = last_descriptor_buffer_chunk;
++            descriptor_buffer_ring.TouchFrame(scheduler);
++            GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::DescriptorBufferReuse);
++            GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::DescriptorReuse,
++                                       descriptor_buffer_layout.size);
++        } else {
++            const DescriptorBufferRing::Allocation alloc{
++                descriptor_buffer_ring.Allocate(scheduler, descriptor_buffer_layout.size)};
++            if (!alloc.host) {
++                LOG_DEBUG(Render_Vulkan, "Failed to reserve descriptor memory, skipping dispatch");
++                return false;
++            }
++            WriteDescriptorBuffer(device, descriptor_buffer_layout, descriptor_data, alloc.host);
++            GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::DescriptorBufferWrite);
++            GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::DescriptorWrite,
++                                       descriptor_buffer_layout.size);
++            descriptor_buffer_offset = alloc.offset;
++            descriptor_buffer_chunk = alloc.chunk;
++            if (allow_reuse) {
++                last_descriptor_buffer_offset = alloc.offset;
++                last_descriptor_buffer_chunk = alloc.chunk;
++                last_descriptor_buffer_generation = alloc.generation;
++                last_descriptor_payload.assign(descriptor_data,
++                                               descriptor_data + num_descriptor_entries);
++            }
+         }
+-        WriteDescriptorBuffer(device, descriptor_buffer_layout, descriptor_data, alloc.host);
+-        descriptor_buffer_offset = alloc.offset;
+-        descriptor_buffer_chunk = alloc.chunk;
+     }
+ 
+     const bool bind_descriptor_buffer{
+diff --git a/src/video_core/renderer_vulkan/vk_compute_pipeline.h b/src/video_core/renderer_vulkan/vk_compute_pipeline.h
+index fba0519b58da0668a1d37605b8fb87d1a189dbf8..2add3ea3f3229457af7f252748642feabe87e554 100644
+--- a/src/video_core/renderer_vulkan/vk_compute_pipeline.h
++++ b/src/video_core/renderer_vulkan/vk_compute_pipeline.h
+@@ -9,6 +9,7 @@
+ #include <atomic>
+ #include <condition_variable>
+ #include <mutex>
++#include <vector>
+ 
+ #include "common/common_types.h"
+ #include "common/thread_worker.h"
+@@ -72,6 +73,10 @@ private:
+     bool uses_push_descriptor{false};
+     bool uses_descriptor_buffer{false};
+     DescriptorBufferLayout descriptor_buffer_layout;
++    std::vector<DescriptorUpdateEntry> last_descriptor_payload;
++    VkDeviceSize last_descriptor_buffer_offset{};
++    u32 last_descriptor_buffer_chunk{};
++    u64 last_descriptor_buffer_generation{};
+     DescriptorAllocator descriptor_allocator;
+     vk::PipelineLayout pipeline_layout;
+     vk::DescriptorUpdateTemplate descriptor_update_template;
+diff --git a/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp b/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp
+index 0e2d582e3f2e56270a61610568fe31932b4ec8f0..aa8879b32421712fa06e425781ebe981b048d4ab 100644
+--- a/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp
++++ b/src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp
+@@ -2,7 +2,6 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ 
+ #include <algorithm>
+-#include <string_view>
+ 
+ #include "common/alignment.h"
+ #include "common/assert.h"
+@@ -28,17 +27,16 @@ DescriptorBufferRing::DescriptorBufferRing(const Device& device_,
+                                              props.resourceDescriptorBufferAddressSpaceSize,
+                                              props.descriptorBufferAddressSpaceSize})};
+ 
+-    // The G720 has enough shared memory for a slightly larger descriptor ring. Keeping this
+-    // limited to the proprietary ARM G720 path avoids changing the generic mobile tiler policy.
+-    // A larger ring reduces the chance of a CPU-side Scheduler::Finish() when descriptor-heavy
+-    // scenes exhaust the generic 2 MiB tiler budget.
+-    const bool is_mali_g720{device.GetDriverID() == VK_DRIVER_ID_ARM_PROPRIETARY &&
+-                            device.GetModelName().find("Mali-G720") != std::string_view::npos};
+-    const VkDeviceSize frame_size{is_mali_g720   ? MALI_G720_FRAME_SIZE
+-                                  : device.IsTiler() ? TILER_FRAME_SIZE
+-                                                     : DESKTOP_FRAME_SIZE};
+-    if (is_mali_g720) {
+-        LOG_INFO(Render_Vulkan, "Mali-G720 descriptor ring budget: {} MiB",
++    // A larger ring reduces emergency Scheduler::Finish() calls in descriptor-heavy scenes. The
++    // central Vulkan profile owns identity and capability policy; this allocator no longer repeats
++    // a fragile product-name check.
++    const auto& gpu_profile = device.GetGpuPerformanceProfile();
++    const bool use_g720_budget = gpu_profile.IsActive() && gpu_profile.IsMaliG720();
++    const VkDeviceSize frame_size{use_g720_budget ? MALI_G720_FRAME_SIZE
++                                   : device.IsTiler() ? TILER_FRAME_SIZE
++                                                      : DESKTOP_FRAME_SIZE};
++    if (use_g720_budget) {
++        LOG_INFO(Render_Vulkan, "[MaliBackend] descriptor ring budget active: {} MiB/frame",
+                  MALI_G720_FRAME_SIZE / (1024 * 1024));
+     }
+     const VkDeviceSize chunk_size{
+diff --git a/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp b/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
+index 4f81b26ac14c4dcdb01b97c8e9224a49307d8365..742baa65b80d0edfefdbd355ea3c936a0d572888 100644
+--- a/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
++++ b/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
+@@ -16,6 +16,8 @@
+ #include "video_core/renderer_vulkan/pipeline_helper.h"
+ 
+ #include "common/bit_field.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/renderer_vulkan/maxwell_to_vk.h"
+ #include "video_core/renderer_vulkan/pipeline_statistics.h"
+ #include "video_core/renderer_vulkan/vk_buffer_cache.h"
+@@ -581,6 +583,9 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
+             descriptor_buffer_offset = last_descriptor_buffer_offset;
+             descriptor_buffer_chunk = last_descriptor_buffer_chunk;
+             descriptor_buffer_ring.TouchFrame(scheduler);
++            GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::DescriptorBufferReuse);
++            GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::DescriptorReuse,
++                                       descriptor_buffer_layout.size);
+         } else {
+             const DescriptorBufferRing::Allocation alloc{
+                 descriptor_buffer_ring.Allocate(scheduler, descriptor_buffer_layout.size)};
+@@ -589,6 +594,9 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
+                 return false;
+             }
+             WriteDescriptorBuffer(device, descriptor_buffer_layout, entries, alloc.host);
++            GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::DescriptorBufferWrite);
++            GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::DescriptorWrite,
++                                       descriptor_buffer_layout.size);
+             descriptor_buffer_offset = alloc.offset;
+             descriptor_buffer_chunk = alloc.chunk;
+             last_descriptor_buffer_offset = alloc.offset;
+diff --git a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
+index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae30a026fa0 100644
+--- a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
++++ b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
+@@ -27,6 +27,8 @@
+ #include "video_core/engines/kepler_compute.h"
+ #include "video_core/engines/maxwell_3d.h"
+ #include "video_core/memory_manager.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/renderer_vulkan/fixed_pipeline_state.h"
+ #include "video_core/renderer_vulkan/maxwell_to_vk.h"
+ #include "video_core/renderer_vulkan/pipeline_helper.h"
+@@ -65,10 +67,36 @@ using VideoCommon::FileEnvironment;
+ using VideoCommon::GenericEnvironment;
+ using VideoCommon::GraphicsEnvironment;
+ 
+-constexpr u32 CACHE_VERSION = 18;
++constexpr u32 CACHE_VERSION = 19;
+ constexpr size_t VULKAN_CACHE_FLUSH_PIPELINES = 128;
+ constexpr size_t VULKAN_CACHE_FLUSH_MIN_SECONDS = 30;
+ constexpr std::array<char, 8> VULKAN_CACHE_MAGIC_NUMBER{'y', 'u', 'z', 'u', 'v', 'k', 'c', 'h'};
++constexpr size_t VULKAN_CACHE_MAX_BYTES = 64 * 1024 * 1024;
++
++struct VulkanCacheIdentity {
++    u32 vendor_id{};
++    u32 device_id{};
++    u32 driver_version{};
++    std::array<u8, VK_UUID_SIZE> pipeline_cache_uuid{};
++    u32 renderer_config{};
++
++    auto operator<=>(const VulkanCacheIdentity&) const = default;
++};
++
++VulkanCacheIdentity GetVulkanCacheIdentity(const Device& device) {
++    const auto policy = static_cast<u32>(Settings::values.mali_renderer_optimization.GetValue());
++    return {
++        .vendor_id = device.GetVendorID(),
++        .device_id = device.GetDeviceID(),
++        .driver_version = device.GetDriverVersion(),
++        .pipeline_cache_uuid = device.GetPipelineCacheUUID(),
++        .renderer_config = policy | (device.IsExtDescriptorBufferSupported() ? 1U << 8 : 0U) |
++                           (device.GetGpuPerformanceProfile().IsActive() ? 1U << 9 : 0U),
++    };
++}
++
++constexpr size_t VULKAN_CACHE_HEADER_BYTES =
++    VULKAN_CACHE_MAGIC_NUMBER.size() + sizeof(u32) + sizeof(u32) * 4 + VK_UUID_SIZE;
+ 
+ template <typename Container>
+ auto MakeSpan(Container& container) {
+@@ -564,6 +592,8 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipeline() {
+     if (current_pipeline) {
+         GraphicsPipeline* const next{current_pipeline->Next(graphics_key)};
+         if (next) {
++            GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineHit);
++            GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PipelineHit);
+             current_pipeline = next;
+             return BuiltPipeline(current_pipeline);
+         }
+@@ -586,9 +616,16 @@ ComputePipeline* PipelineCache::CurrentComputePipeline() {
+     const auto [pair, is_new]{compute_cache.try_emplace(key)};
+     auto& pipeline{pair->second};
+     if (!is_new) {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineHit);
++        GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PipelineHit, key.unique_hash);
+         return pipeline.get();
+     }
++    GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineMiss);
++    GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PipelineMiss, key.unique_hash);
+     pipeline = CreateComputePipeline(key, shader);
++    if (pipeline) {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineCreated);
++    }
+     return pipeline.get();
+ }
+ 
+@@ -640,6 +677,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
+             std::scoped_lock lock{state.mutex};
+             if (pipeline) {
+                 compute_cache.emplace(key, std::move(pipeline));
++                GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::DiskPipelineLoaded);
++                GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineCreated);
+             }
+             ++state.built;
+             if (state.has_loaded) {
+@@ -692,6 +731,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
+             std::scoped_lock lock{state.mutex};
+             if (pipeline) {
+                 graphics_cache.emplace(key, std::move(pipeline));
++                GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::DiskPipelineLoaded);
++                GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineCreated);
+             }
+             ++state.built;
+             if (state.has_loaded) {
+@@ -733,6 +774,14 @@ void PipelineCache::QueueVulkanPipelineCacheFlush() {
+     if (++pipelines_since_flush < VULKAN_CACHE_FLUSH_PIPELINES) {
+         return;
+     }
++#ifdef HAS_MALI_X7PRO_FG
++    // Serialization is optional maintenance. Keep accumulated pressure so a later headroom frame
++    // retries it; never steal time from a measured real-frame deadline.
++    if (!Common::Android::X7Pro::AllowWork(
++            Common::Android::X7Pro::BudgetWork::CacheMaintenance)) {
++        return;
++    }
++#endif
+     const auto now = std::chrono::steady_clock::now();
+     const auto megabytes = last_cache_size.load(std::memory_order_relaxed) / (1024 * 1024);
+     const std::chrono::seconds interval{
+@@ -759,7 +808,17 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineSlowPath() {
+     const auto [pair, is_new]{graphics_cache.try_emplace(graphics_key)};
+     auto& pipeline{pair->second};
+     if (is_new) {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineMiss);
++        GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PipelineMiss,
++                                   graphics_key.Hash());
+         pipeline = CreateGraphicsPipeline();
++        if (pipeline) {
++            GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineCreated);
++        }
++    } else {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PipelineHit);
++        GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PipelineHit,
++                                   graphics_key.Hash());
+     }
+     if (!pipeline) {
+         return nullptr;
+@@ -1043,17 +1102,33 @@ void PipelineCache::SerializeVulkanPipelineCache(const std::filesystem::path& fi
+                   Common::FS::PathToUTF8String(filename));
+         return;
+     }
++    const VulkanCacheIdentity identity = GetVulkanCacheIdentity(device);
+     file.write(VULKAN_CACHE_MAGIC_NUMBER.data(), VULKAN_CACHE_MAGIC_NUMBER.size())
+-        .write(reinterpret_cast<const char*>(&cache_version), sizeof(cache_version));
++        .write(reinterpret_cast<const char*>(&cache_version), sizeof(cache_version))
++        .write(reinterpret_cast<const char*>(&identity.vendor_id), sizeof(identity.vendor_id))
++        .write(reinterpret_cast<const char*>(&identity.device_id), sizeof(identity.device_id))
++        .write(reinterpret_cast<const char*>(&identity.driver_version), sizeof(identity.driver_version))
++        .write(reinterpret_cast<const char*>(identity.pipeline_cache_uuid.data()),
++               identity.pipeline_cache_uuid.size())
++        .write(reinterpret_cast<const char*>(&identity.renderer_config),
++               sizeof(identity.renderer_config));
+ 
+     size_t cache_size = 0;
+     std::vector<char> cache_data;
+     if (pipeline_cache) {
+         pipeline_cache.Read(&cache_size, nullptr);
+-        cache_data.resize(cache_size);
+-        pipeline_cache.Read(&cache_size, cache_data.data());
++        if (cache_size <= VULKAN_CACHE_MAX_BYTES) {
++            cache_data.resize(cache_size);
++            pipeline_cache.Read(&cache_size, cache_data.data());
++        } else {
++            LOG_WARNING(Render_Vulkan,
++                        "Driver pipeline cache exceeds bounded limit ({} > {} bytes); "
++                        "serializing an empty payload",
++                        cache_size, VULKAN_CACHE_MAX_BYTES);
++            cache_size = 0;
++        }
+     }
+-    file.write(cache_data.data(), cache_size);
++    file.write(cache_data.data(), static_cast<std::streamsize>(cache_size));
+ 
+     LOG_INFO(Render_Vulkan, "Vulkan driver pipelines cached at: {}",
+              Common::FS::PathToUTF8String(filename));
+@@ -1088,9 +1163,24 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
+ 
+         std::array<char, 8> magic_number;
+         u32 cache_version;
++        VulkanCacheIdentity stored_identity{};
+         file.read(magic_number.data(), magic_number.size())
+-            .read(reinterpret_cast<char*>(&cache_version), sizeof(cache_version));
+-        if (magic_number != VULKAN_CACHE_MAGIC_NUMBER || cache_version != expected_cache_version) {
++            .read(reinterpret_cast<char*>(&cache_version), sizeof(cache_version))
++            .read(reinterpret_cast<char*>(&stored_identity.vendor_id),
++                  sizeof(stored_identity.vendor_id))
++            .read(reinterpret_cast<char*>(&stored_identity.device_id),
++                  sizeof(stored_identity.device_id))
++            .read(reinterpret_cast<char*>(&stored_identity.driver_version),
++                  sizeof(stored_identity.driver_version))
++            .read(reinterpret_cast<char*>(stored_identity.pipeline_cache_uuid.data()),
++                  stored_identity.pipeline_cache_uuid.size())
++            .read(reinterpret_cast<char*>(&stored_identity.renderer_config),
++                  sizeof(stored_identity.renderer_config));
++        const VulkanCacheIdentity expected_identity = GetVulkanCacheIdentity(device);
++        const bool invalid_header = magic_number != VULKAN_CACHE_MAGIC_NUMBER ||
++                                    cache_version != expected_cache_version ||
++                                    stored_identity != expected_identity;
++        if (invalid_header) {
+             file.close();
+             if (Common::FS::RemoveFile(filename)) {
+                 if (magic_number != VULKAN_CACHE_MAGIC_NUMBER) {
+@@ -1099,6 +1189,11 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
+                 if (cache_version != expected_cache_version) {
+                     LOG_INFO(Common_Filesystem, "Deleting old Vulkan driver pipeline cache");
+                 }
++                if (stored_identity != expected_identity) {
++                    LOG_INFO(Common_Filesystem,
++                             "Deleting Vulkan driver cache with mismatched "
++                             "vendor/device/driver/UUID/config identity");
++                }
+             } else {
+                 LOG_ERROR(Common_Filesystem,
+                           "Invalid Vulkan pipeline cache file and failed to delete it in \"{}\"",
+@@ -1107,8 +1202,17 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
+             return create_pipeline_cache(0, nullptr);
+         }
+ 
+-        static constexpr size_t header_size = magic_number.size() + sizeof(cache_version);
+-        const size_t cache_size = static_cast<size_t>(end) - header_size;
++        const size_t file_size = static_cast<size_t>(end);
++        if (file_size < VULKAN_CACHE_HEADER_BYTES ||
++            file_size - VULKAN_CACHE_HEADER_BYTES > VULKAN_CACHE_MAX_BYTES) {
++            LOG_ERROR(Common_Filesystem,
++                      "Vulkan driver pipeline cache has an invalid or unbounded size: {} bytes",
++                      file_size);
++            file.close();
++            Common::FS::RemoveFile(filename);
++            return create_pipeline_cache(0, nullptr);
++        }
++        const size_t cache_size = file_size - VULKAN_CACHE_HEADER_BYTES;
+         std::vector<char> cache_data(cache_size);
+         file.read(cache_data.data(), cache_size);
+ 
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.cpp b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+index 4c0f8a5e6382ac1fa1f761aa7af4e63235e46d29..67730377db35d3ece81b8fe7ca75aa24778fa6d3 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.cpp
++++ b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+@@ -6,6 +6,8 @@
+ 
+ #include "common/settings.h"
+ #include "common/thread.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #ifdef HAS_MALI_X7PRO_FG
+ #include "common/android/poco_x7pro_profile.h"
+ #endif
+@@ -517,6 +519,8 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+ 
+     const VkImage image{swapchain.CurrentImage()};
+     const VkExtent2D extent = swapchain.GetExtent();
++    const auto& fast_paths = device.GetGpuPerformanceProfile().FastPaths();
++    const bool precise_present_barrier = fast_paths.precise_present_barrier;
+     const std::array pre_barriers{
+         VkImageMemoryBarrier{
+             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+@@ -560,7 +564,7 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+             .pNext = nullptr,
+             .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+-            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
++            .dstAccessMask = precise_present_barrier ? 0U : VK_ACCESS_MEMORY_READ_BIT,
+             .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+             .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+@@ -578,7 +582,10 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+             .pNext = nullptr,
+             .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+-            .dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
++            .dstAccessMask = precise_present_barrier
++                                 ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
++                                       VK_ACCESS_SHADER_WRITE_BIT
++                                 : VK_ACCESS_MEMORY_WRITE_BIT,
+             .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+             .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+@@ -594,22 +601,51 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+         },
+     };
+ 
+-    cmdbuf.PipelineBarrier(vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER, VK_PIPELINE_STAGE_TRANSFER_BIT, {},
+-                           {}, {}, pre_barriers);
+-
+-    if (blit_supported) {
++    const VkPipelineStageFlags present_src_stages = precise_present_barrier
++                                                        ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
++                                                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
++                                                        : vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER;
++    cmdbuf.PipelineBarrier(present_src_stages, VK_PIPELINE_STAGE_TRANSFER_BIT, {}, {}, {},
++                           pre_barriers);
++
++    // RecreateSwapchain normally makes these extents identical. A transfer copy is sufficient
++    // because the intermediate image uses the swapchain's base format; avoid invoking Mali's
++    // filtering blit path when no scaling or conversion exists.
++    const bool exact_extent = frame->width == extent.width && frame->height == extent.height;
++    const bool use_copy = !blit_supported ||
++                          (fast_paths.present_copy_for_identical_extent && exact_extent);
++    u64 synthetic_marker = 0;
++#ifdef HAS_MALI_X7PRO_FG
++    synthetic_marker = frame->synthetic ? 1 : 0;
++#endif
++    if (use_copy) {
++        cmdbuf.CopyImage(*frame->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
++                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
++                         MakeImageCopy(frame->width, frame->height, extent.width, extent.height));
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PresentCopy);
++        GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PresentCopy, extent.width,
++                                   extent.height, synthetic_marker);
++    } else {
+         cmdbuf.BlitImage(*frame->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          MakeImageBlit(frame->width, frame->height, extent.width, extent.height),
+                          VK_FILTER_LINEAR);
+-    } else {
+-        cmdbuf.CopyImage(*frame->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
+-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+-                         MakeImageCopy(frame->width, frame->height, extent.width, extent.height));
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::PresentBlit);
++        GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::PresentBlit, extent.width,
++                                   extent.height, synthetic_marker);
+     }
+ 
+-    cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, {},
+-                           {}, {}, post_barriers);
++    const VkPipelineStageFlags present_dst_stages = precise_present_barrier
++                                                        ? VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT |
++                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
++                                                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
++                                                        : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
++    cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, present_dst_stages, {}, {}, {},
++                           post_barriers);
++    GPU::Logging::CountRenderer(precise_present_barrier
++                                    ? GPU::Logging::RendererCounter::PreciseBarrier
++                                    : GPU::Logging::RendererCounter::GenericBarrier,
++                                2);
+ 
+     cmdbuf.End();
+ 
+@@ -642,6 +678,7 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+         case VK_SUCCESS:
+             break;
+         case VK_ERROR_DEVICE_LOST:
++            GPU::Logging::FlightRecorder::Get().DumpOnce("present-submit-device-lost");
+             device.ReportLoss();
+             [[fallthrough]];
+         default:
+diff --git a/src/video_core/renderer_vulkan/vk_query_cache.cpp b/src/video_core/renderer_vulkan/vk_query_cache.cpp
+index 2b5aa24053d881975904bd17111a48f34cb7547d..2d75377b9e22f95be6a93424830eb735d2b058e4 100644
+--- a/src/video_core/renderer_vulkan/vk_query_cache.cpp
++++ b/src/video_core/renderer_vulkan/vk_query_cache.cpp
+@@ -15,6 +15,7 @@
+ #include <vector>
+ #include "video_core/renderer_vulkan/vk_texture_cache.h"
+ #include "common/bit_util.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
+ #include "common/common_types.h"
+ #include "video_core/engines/maxwell_3d.h"
+ #include "video_core/host1x/gpu_device_memory_manager.h"
+@@ -91,6 +92,7 @@ public:
+         case VK_SUCCESS:
+             return;
+         case VK_ERROR_DEVICE_LOST:
++            GPU::Logging::FlightRecorder::Get().DumpOnce("query-results-device-lost");
+             device.ReportLoss();
+             [[fallthrough]];
+         default:
+diff --git a/src/video_core/renderer_vulkan/vk_render_pass_cache.cpp b/src/video_core/renderer_vulkan/vk_render_pass_cache.cpp
+index 4d8fa15d164ae751d5fbfcaeceb15c39fe4f8c14..7e40c56858a1e2c8af67f9f6d354be3f52cb153e 100644
+--- a/src/video_core/renderer_vulkan/vk_render_pass_cache.cpp
++++ b/src/video_core/renderer_vulkan/vk_render_pass_cache.cpp
+@@ -43,6 +43,16 @@ using VideoCore::Surface::SurfaceType;
+             }
+         }
+ 
++        VkImageLayout AttachmentLayout(const Device& device, PixelFormat format) {
++            if (!device.GetGpuPerformanceProfile().FastPaths().tile_attachment_layouts) {
++                return VK_IMAGE_LAYOUT_GENERAL;
++            }
++            const SurfaceType surface_type = GetSurfaceType(format);
++            return surface_type == SurfaceType::ColorTexture
++                       ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
++                       : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
++        }
++
+         VkAttachmentDescription AttachmentDescription(const Device& device, PixelFormat format,
+                                                       VkSampleCountFlagBits samples,
+                                                       VkAttachmentLoadOp load_op,
+@@ -150,7 +160,7 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
+         const bool is_valid{format != PixelFormat::Invalid};
+         references[index] = VkAttachmentReference{
+             .attachment = is_valid ? num_colors : VK_ATTACHMENT_UNUSED,
+-            .layout = VK_IMAGE_LAYOUT_GENERAL,
++            .layout = is_valid ? AttachmentLayout(*device, format) : VK_IMAGE_LAYOUT_UNDEFINED,
+         };
+         if (is_valid) {
+             const VkAttachmentLoadOp load_op = (key.color_clear_mask & (1u << index)) != 0
+@@ -170,7 +180,7 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
+     if (key.depth_format != PixelFormat::Invalid) {
+         depth_reference = VkAttachmentReference{
+             .attachment = num_colors,
+-            .layout = VK_IMAGE_LAYOUT_GENERAL,
++            .layout = AttachmentLayout(*device, key.depth_format),
+         };
+         const VkAttachmentLoadOp depth_load_op = key.depth_stencil_clear
+                                                      ? VK_ATTACHMENT_LOAD_OP_CLEAR
+@@ -190,7 +200,7 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
+             const bool is_valid{format != PixelFormat::Invalid};
+             resolve_references[index] = VkAttachmentReference{
+                 .attachment = is_valid ? static_cast<u32>(descriptions.size()) : VK_ATTACHMENT_UNUSED,
+-                .layout = VK_IMAGE_LAYOUT_GENERAL,
++                .layout = is_valid ? AttachmentLayout(*device, format) : VK_IMAGE_LAYOUT_UNDEFINED,
+             };
+             if (is_valid) {
+                 VkAttachmentDescription resolve_desc =
+@@ -209,7 +219,7 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
+     if (do_resolve_depth_stencil) {
+         depth_resolve_reference = VkAttachmentReference{
+             .attachment = static_cast<u32>(descriptions.size()),
+-            .layout = VK_IMAGE_LAYOUT_GENERAL,
++            .layout = AttachmentLayout(*device, key.depth_format),
+         };
+         VkAttachmentDescription resolve_desc =
+             AttachmentDescription(*device, key.depth_format, VK_SAMPLE_COUNT_1_BIT,
+diff --git a/src/video_core/renderer_vulkan/vk_scheduler.cpp b/src/video_core/renderer_vulkan/vk_scheduler.cpp
+index 2c1b069fb143eb9eecdd761fe23fe2126617bb75..db485dad5be5a5233e96b945a5609e2ed74a5b4a 100644
+--- a/src/video_core/renderer_vulkan/vk_scheduler.cpp
++++ b/src/video_core/renderer_vulkan/vk_scheduler.cpp
+@@ -18,12 +18,15 @@
+ 
+ #include "common/settings.h"
+ #include "common/thread.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
+ #include "video_core/gpu_logging/gpu_logging.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/renderer_vulkan/vk_command_pool.h"
+ #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
+ #include "video_core/renderer_vulkan/vk_master_semaphore.h"
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+ #include "video_core/renderer_vulkan/vk_state_tracker.h"
++#include "video_core/renderer_vulkan/vk_sync_optimizer.h"
+ #include "video_core/renderer_vulkan/vk_texture_cache.h"
+ #include "video_core/vulkan_common/vulkan_device.h"
+ #include "video_core/vulkan_common/vulkan_wrapper.h"
+@@ -220,6 +223,7 @@ void Scheduler::RequestRenderpass(const Framebuffer* framebuffer) {
+     if (renderpass == state.renderpass && framebuffer_handle == state.framebuffer &&
+         render_area.width == state.render_area.width &&
+         render_area.height == state.render_area.height) {
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::RenderScopeContinuation);
+         return;
+     }
+     // Ends any active pass and realizes a deferred clear
+@@ -359,13 +363,24 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
+     RecordWithUploadBuffer([signal_semaphore, wait_semaphore, signal_value, real_frame_end,
+                             frame_generation, synthetic,
+                             this](vk::CommandBuffer cmdbuf, vk::CommandBuffer upload_cmdbuf) {
+-        static constexpr VkMemoryBarrier WRITE_BARRIER{
++        const Sync::MemoryDependency dependency = Sync::UploadToMain(device);
++        const VkMemoryBarrier write_barrier{
+             .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+             .pNext = nullptr,
+-            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+-            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
++            .srcAccessMask = dependency.src_access,
++            .dstAccessMask = dependency.dst_access,
+         };
+-        upload_cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, WRITE_BARRIER);
++        upload_cmdbuf.PipelineBarrier(dependency.src_stages, dependency.dst_stages, 0,
++                                      write_barrier);
++        const bool precise_upload =
++            device.GetGpuPerformanceProfile().FastPaths().precise_upload_barrier;
++        GPU::Logging::CountRenderer(precise_upload
++                                        ? GPU::Logging::RendererCounter::PreciseBarrier
++                                        : GPU::Logging::RendererCounter::GenericBarrier);
++        GPU::Logging::RecordFlight(precise_upload
++                                       ? GPU::Logging::FlightEvent::OptimizedBarrier
++                                       : GPU::Logging::FlightEvent::GenericBarrier,
++                                   dependency.src_stages, dependency.dst_stages);
+         upload_cmdbuf.End();
+ #ifdef HAS_MALI_X7PRO_FG
+         x7pro_timing->End(cmdbuf, signal_value, real_frame_end, frame_generation);
+@@ -377,6 +392,9 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
+         }
+ 
+         std::scoped_lock lock{submit_mutex};
++        GPU::Logging::CountRenderer(GPU::Logging::RendererCounter::Submission);
++        GPU::Logging::RecordFlight(GPU::Logging::FlightEvent::Submit, signal_value,
++                                   real_frame_end ? 1 : 0, synthetic ? 1 : 0);
+         switch (const VkResult result = master_semaphore->SubmitQueue(
+                     cmdbuf, upload_cmdbuf, signal_semaphore, wait_semaphore, signal_value)) {
+         case VK_SUCCESS:
+@@ -391,6 +409,7 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
+             }
+             break;
+         case VK_ERROR_DEVICE_LOST:
++            GPU::Logging::FlightRecorder::Get().DumpOnce("scheduler-submit-device-lost");
+             device.ReportLoss();
+             [[fallthrough]];
+         default:
+diff --git a/src/video_core/renderer_vulkan/vk_sync_optimizer.h b/src/video_core/renderer_vulkan/vk_sync_optimizer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..9c8bae98fb3e30f6796535480507f12df0fb2e07
+--- /dev/null
++++ b/src/video_core/renderer_vulkan/vk_sync_optimizer.h
+@@ -0,0 +1,49 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <vulkan/vulkan_core.h>
++
++#include "video_core/vulkan_common/vulkan_device.h"
++
++namespace Vulkan::Sync {
++
++struct MemoryDependency {
++    VkPipelineStageFlags src_stages{};
++    VkPipelineStageFlags dst_stages{};
++    VkAccessFlags src_access{};
++    VkAccessFlags dst_access{};
++};
++
++// Upload command buffers contain transfer writes and execute immediately before the main command
++// buffer in the same queue submission. This mask names every consumer used by Eden instead of
++// forcing unrelated host/top/bottom/all-command stages to participate. If the central profile is
++// not active, return the original conservative dependency unchanged.
++inline MemoryDependency UploadToMain(const Device& device) noexcept {
++    if (!device.GetGpuPerformanceProfile().FastPaths().precise_upload_barrier) {
++        return {
++            .src_stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
++            .dst_stages = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
++            .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
++            .dst_access = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
++        };
++    }
++    return {
++        .src_stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
++        .dst_stages = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
++                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
++                      VK_PIPELINE_STAGE_TRANSFER_BIT,
++        .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
++        .dst_access = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_INDEX_READ_BIT |
++                      VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT |
++                      VK_ACCESS_INPUT_ATTACHMENT_READ_BIT | VK_ACCESS_SHADER_READ_BIT |
++                      VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
++                      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
++                      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
++                      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
++                      VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
++    };
++}
++
++} // namespace Vulkan::Sync
+diff --git a/src/video_core/vulkan_common/vulkan_device.cpp b/src/video_core/vulkan_common/vulkan_device.cpp
+index be09bca8d34e5c5e63b0ae07b10487b79c6c556e..e3e5a073180ca41f1db1c40852f24bde1586e560 100644
+--- a/src/video_core/vulkan_common/vulkan_device.cpp
++++ b/src/video_core/vulkan_common/vulkan_device.cpp
+@@ -27,6 +27,8 @@
+ #include "common/settings_enums.h"
+ #include "video_core/vulkan_common/nsight_aftermath_tracker.h"
+ #include "video_core/vulkan_common/vma.h"
++#include "video_core/gpu_logging/gpu_flight_recorder.h"
++#include "video_core/gpu_logging/gpu_renderer_diagnostics.h"
+ #include "video_core/vulkan_common/vulkan_device.h"
+ #include "video_core/vulkan_common/vulkan_wrapper.h"
+ #include "video_core/gpu_logging/gpu_logging.h"
+@@ -479,6 +481,20 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR
+ 
+     SetupFamilies(surface);
+     const auto queue_cis = GetDeviceQueueCreateInfos();
++    const auto queue_families = physical.GetQueueFamilyProperties();
++    const VkQueueFlags graphics_queue_flags = graphics_family < queue_families.size()
++                                                  ? queue_families[graphics_family].queueFlags
++                                                  : VkQueueFlags{};
++    const u32 mali_mode_value =
++        std::min(Settings::values.mali_renderer_optimization.GetValue(), 2U);
++    gpu_performance_profile = GpuPerformanceProfile::Create(
++        driver_id, properties.properties.vendorID, properties.properties.deviceID,
++        properties.properties.deviceName, supported_extensions, extensions.synchronization2,
++        HasTimelineSemaphore(),
++        extensions.descriptor_buffer && features.buffer_device_address.bufferDeviceAddress,
++        extensions.memory_budget, features.robust_image_access.robustImageAccess,
++        features.robustness2.nullDescriptor, graphics_queue_flags,
++        graphics_family == present_family, static_cast<GpuOptimizationMode>(mali_mode_value));
+ 
+     // GetSuitability has already configured the linked list of features for us.
+     // Reuse it here.
+@@ -771,6 +787,13 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR
+ 
+     // Initialize GPU logging if enabled
+     InitializeGPULogging();
++    gpu_performance_profile.LogActivation();
++    GPU::Logging::ConfigureRendererDiagnostics(
++        gpu_performance_profile.IsActive(), static_cast<u32>(gpu_performance_profile.Mode()),
++        gpu_performance_profile.EnabledFastPathMask());
++    GPU::Logging::RecordFlight(
++        GPU::Logging::FlightEvent::DeviceProfile, properties.properties.vendorID,
++        properties.properties.deviceID, gpu_performance_profile.IsActive() ? 1 : 0);
+ }
+ 
+ Device::~Device() {
+diff --git a/src/video_core/vulkan_common/vulkan_device.h b/src/video_core/vulkan_common/vulkan_device.h
+index 077b1c3e23c87a25914dde6f4b606e0b44e42229..1663db9f7a226491845bb97e5594601b31e58d37 100644
+--- a/src/video_core/vulkan_common/vulkan_device.h
++++ b/src/video_core/vulkan_common/vulkan_device.h
+@@ -17,6 +17,7 @@
+ #include "common/common_types.h"
+ #include "common/logging.h"
+ #include "common/settings.h"
++#include "video_core/vulkan_common/vulkan_gpu_profile.h"
+ #include "video_core/vulkan_common/vulkan_wrapper.h"
+ 
+ VK_DEFINE_HANDLE(VmaAllocator)
+@@ -317,6 +318,22 @@ public:
+         return properties.driver.driverID;
+     }
+ 
++    u32 GetVendorID() const noexcept {
++        return properties.properties.vendorID;
++    }
++
++    u32 GetDeviceID() const noexcept {
++        return properties.properties.deviceID;
++    }
++
++    const u8* GetPipelineCacheUUID() const noexcept {
++        return properties.properties.pipelineCacheUUID;
++    }
++
++    const GpuPerformanceProfile& GetGpuPerformanceProfile() const noexcept {
++        return gpu_performance_profile;
++    }
++
+     bool IsSparseBindingSupported() const {
+         return features.features.sparseBinding && graphics_family_sparse_binding;
+     }
+@@ -1207,6 +1224,7 @@ private:
+ 
+     VkPhysicalDeviceFeatures2 features2{};
+     VkPhysicalDeviceProperties2 properties2{};
++    GpuPerformanceProfile gpu_performance_profile{};
+ 
+     // Misc features
+     bool is_optimal_astc_supported{};          ///< Support for all guest ASTC formats.
+diff --git a/src/video_core/vulkan_common/vulkan_gpu_profile.cpp b/src/video_core/vulkan_common/vulkan_gpu_profile.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..e8969daf9fced96bd3e94caebabf9b0e32ce1b75
+--- /dev/null
++++ b/src/video_core/vulkan_common/vulkan_gpu_profile.cpp
+@@ -0,0 +1,158 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#include "video_core/vulkan_common/vulkan_gpu_profile.h"
++
++#include <algorithm>
++#include <cctype>
++
++#ifndef EDEN_GPU_PROFILE_POLICY_ONLY
++#include "common/logging.h"
++#endif
++
++namespace Vulkan {
++namespace {
++
++constexpr u32 ARM_VENDOR_ID = 0x13B5;
++
++std::string CompactLower(std::string_view value) {
++    std::string result;
++    result.reserve(value.size());
++    for (const unsigned char c : value) {
++        if (std::isalnum(c) != 0) {
++            result.push_back(static_cast<char>(std::tolower(c)));
++        }
++    }
++    return result;
++}
++
++bool HasExtension(const std::set<std::string, std::less<>>& extensions,
++                  std::string_view extension) {
++    return extensions.contains(extension);
++}
++
++[[maybe_unused]] const char* ModeName(GpuOptimizationMode mode) {
++    switch (mode) {
++    case GpuOptimizationMode::Disabled:
++        return "off";
++    case GpuOptimizationMode::Automatic:
++        return "auto";
++    case GpuOptimizationMode::Aggressive:
++        return "aggressive";
++    }
++    return "off";
++}
++
++} // Anonymous namespace
++
++GpuPerformanceProfile GpuPerformanceProfile::Create(
++    VkDriverId driver_id_, u32 vendor_id_, u32 device_id_, std::string_view model_name_,
++    const std::set<std::string, std::less<>>& advertised_extensions,
++    bool synchronization2, bool timeline_semaphore, bool descriptor_buffer, bool memory_budget,
++    bool image_robustness, bool robustness2, VkQueueFlags graphics_queue_flags,
++    bool unified_graphics_present_queue, GpuOptimizationMode requested_mode) {
++    GpuPerformanceProfile profile;
++    profile.driver_id = driver_id_;
++    profile.vendor_id = vendor_id_;
++    profile.device_id = device_id_;
++    profile.model_name = model_name_;
++    profile.mode = requested_mode;
++
++    const std::string compact_name = CompactLower(model_name_);
++    const bool arm_vendor = vendor_id_ == ARM_VENDOR_ID;
++    const bool arm_driver = driver_id_ == VK_DRIVER_ID_ARM_PROPRIETARY;
++    const bool mali_name = compact_name.find("mali") != std::string::npos;
++
++    // Vendor ID and VkDriverId are primary evidence. The model name is accepted only as
++    // supplementary evidence, never by itself.
++    const bool is_mali = arm_driver && (arm_vendor || mali_name);
++    profile.mali_g720 = is_mali && (compact_name.find("malig720") != std::string::npos ||
++                                    compact_name.find("g720mc") != std::string::npos);
++    if (profile.mali_g720) {
++        profile.architecture = GpuArchitecture::MaliFifthGen;
++        profile.architecture_name = "Mali-G720 (Fifth Gen)";
++    } else if (is_mali) {
++        // An unknown proprietary ARM Mali remains on the generic tiler policy. Do not infer a
++        // microarchitecture from driver ownership alone.
++        profile.architecture = GpuArchitecture::MaliUnknown;
++        profile.architecture_name = "Mali (unclassified)";
++    }
++
++    profile.capabilities = {
++        .tile_based = is_mali,
++        .synchronization2 = synchronization2,
++        .timeline_semaphore = timeline_semaphore,
++        .descriptor_buffer = descriptor_buffer,
++        .memory_budget = memory_budget,
++        .image_robustness = image_robustness,
++        // Eden does not enable pipeline robustness in Build 21. Recording advertisement here is
++        // capability reporting only and never places the extension in the device create list.
++        .pipeline_robustness =
++            HasExtension(advertised_extensions, "VK_EXT_pipeline_robustness"),
++        .robustness2 = robustness2 &&
++            HasExtension(advertised_extensions, "VK_EXT_robustness2"),
++        .unified_graphics_present_queue = unified_graphics_present_queue,
++        .graphics_queue_flags = graphics_queue_flags,
++    };
++
++    // Every enabled path below is Vulkan-valid without vendor-private behavior. AUTO is restricted
++    // to positively identified G720 devices. Other vendors and unclassified Mali parts preserve
++    // Eden's generic behavior.
++    profile.active = requested_mode != GpuOptimizationMode::Disabled && profile.mali_g720;
++    if (profile.active) {
++        profile.fast_paths.tile_attachment_layouts = true;
++        profile.fast_paths.tile_load_op_clear = true;
++        profile.fast_paths.precise_upload_barrier = true;
++        profile.fast_paths.precise_present_barrier = true;
++        profile.fast_paths.present_copy_for_identical_extent = true;
++        profile.fast_paths.compute_descriptor_reuse = descriptor_buffer;
++    }
++    return profile;
++}
++
++u32 GpuPerformanceProfile::EnabledFastPathMask() const noexcept {
++    return (fast_paths.tile_attachment_layouts ? 1U << 0 : 0U) |
++           (fast_paths.tile_load_op_clear ? 1U << 1 : 0U) |
++           (fast_paths.precise_upload_barrier ? 1U << 2 : 0U) |
++           (fast_paths.precise_present_barrier ? 1U << 3 : 0U) |
++           (fast_paths.present_copy_for_identical_extent ? 1U << 4 : 0U) |
++           (fast_paths.compute_descriptor_reuse ? 1U << 5 : 0U);
++}
++
++void GpuPerformanceProfile::LogActivation() const {
++#ifdef EDEN_GPU_PROFILE_POLICY_ONLY
++    return;
++#else
++    LOG_INFO(Render_Vulkan,
++             "[MaliBackend] architecture={} vendor={:#06x} device={:#010x} driver_id={} model='{}'",
++             architecture_name, vendor_id, device_id, static_cast<u32>(driver_id), model_name);
++    LOG_INFO(Render_Vulkan,
++             "[MaliBackend] capabilities sync2={} timeline={} descriptor_buffer={} memory_budget={} "
++             "image_robustness={} pipeline_robustness={} robustness2={} unified_queue={}",
++             capabilities.synchronization2, capabilities.timeline_semaphore,
++             capabilities.descriptor_buffer, capabilities.memory_budget,
++             capabilities.image_robustness, capabilities.pipeline_robustness,
++             capabilities.robustness2, capabilities.unified_graphics_present_queue);
++    if (!IsMali()) {
++        LOG_INFO(Render_Vulkan, "[MaliBackend] generic renderer active (non-Mali device)");
++        return;
++    }
++    if (!active) {
++        LOG_INFO(Render_Vulkan, "[MaliBackend] optimized backend inactive mode={} g720={}",
++                 ModeName(mode), mali_g720);
++        return;
++    }
++    LOG_INFO(Render_Vulkan, "[MaliBackend] optimized backend active mode={}", ModeName(mode));
++    LOG_INFO(Render_Vulkan, "[MaliBackend] tile optimization active");
++    LOG_INFO(Render_Vulkan, "[MaliBackend] sync optimizer active backend={}",
++             capabilities.synchronization2 ? "synchronization2" : "legacy-barriers");
++    LOG_INFO(Render_Vulkan, "[MaliBackend] pipeline cache active identity_version=21");
++    LOG_INFO(Render_Vulkan, "[MaliBackend] resource reuse active");
++    if (!capabilities.robustness2) {
++        LOG_INFO(Render_Vulkan,
++                 "[MaliBackend] VK_EXT_robustness2 unavailable; extension is not requested or emulated");
++    }
++#endif
++}
++
++} // namespace Vulkan
+diff --git a/src/video_core/vulkan_common/vulkan_gpu_profile.h b/src/video_core/vulkan_common/vulkan_gpu_profile.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..b9199c7c280485a83a77f19d4287fb8003ec97dc
+--- /dev/null
++++ b/src/video_core/vulkan_common/vulkan_gpu_profile.h
+@@ -0,0 +1,121 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <set>
++#include <string>
++#include <string_view>
++
++#include <vulkan/vulkan_core.h>
++
++#include "common/common_types.h"
++
++namespace Vulkan {
++
++// Keep architecture identification separate from product branding. Vulkan vendor/driver
++// properties establish the Mali family; the model string is only supplementary evidence for a
++// particular generation.
++enum class GpuArchitecture : u8 {
++    Generic,
++    MaliUnknown,
++    MaliValhall,
++    MaliFifthGen,
++};
++
++enum class GpuOptimizationMode : u8 {
++    Disabled,
++    Automatic,
++    Aggressive,
++};
++
++struct GpuCapabilities {
++    bool tile_based{};
++    bool synchronization2{};
++    bool timeline_semaphore{};
++    bool descriptor_buffer{};
++    bool memory_budget{};
++    bool image_robustness{};
++    bool pipeline_robustness{};
++    bool robustness2{};
++    bool unified_graphics_present_queue{};
++    VkQueueFlags graphics_queue_flags{};
++};
++
++struct GpuWorkarounds {
++    // The G720 path never assumes attachment contents may be discarded. DONT_CARE is selected only
++    // when the renderer has explicit guest discard/overwrite evidence.
++    bool require_proven_attachment_discard{true};
++    // General-layout transitions can also carry memory dependencies. Never suppress one merely
++    // because oldLayout == newLayout.
++    bool preserve_same_layout_dependencies{true};
++};
++
++struct GpuFastPaths {
++    bool tile_attachment_layouts{};
++    bool tile_load_op_clear{};
++    bool precise_upload_barrier{};
++    bool precise_present_barrier{};
++    bool present_copy_for_identical_extent{};
++    bool compute_descriptor_reuse{};
++};
++
++class GpuPerformanceProfile {
++public:
++    static GpuPerformanceProfile Create(
++        VkDriverId driver_id, u32 vendor_id, u32 device_id, std::string_view model_name,
++        const std::set<std::string, std::less<>>& advertised_extensions,
++        bool synchronization2, bool timeline_semaphore, bool descriptor_buffer,
++        bool memory_budget, bool image_robustness, bool robustness2,
++        VkQueueFlags graphics_queue_flags, bool unified_graphics_present_queue,
++        GpuOptimizationMode requested_mode);
++
++    [[nodiscard]] GpuArchitecture Architecture() const noexcept {
++        return architecture;
++    }
++    [[nodiscard]] const GpuCapabilities& Capabilities() const noexcept {
++        return capabilities;
++    }
++    [[nodiscard]] const GpuWorkarounds& Workarounds() const noexcept {
++        return workarounds;
++    }
++    [[nodiscard]] const GpuFastPaths& FastPaths() const noexcept {
++        return fast_paths;
++    }
++    [[nodiscard]] u32 EnabledFastPathMask() const noexcept;
++    [[nodiscard]] GpuOptimizationMode Mode() const noexcept {
++        return mode;
++    }
++    [[nodiscard]] bool IsMali() const noexcept {
++        return architecture == GpuArchitecture::MaliUnknown ||
++               architecture == GpuArchitecture::MaliValhall ||
++               architecture == GpuArchitecture::MaliFifthGen;
++    }
++    [[nodiscard]] bool IsMaliG720() const noexcept {
++        return mali_g720;
++    }
++    [[nodiscard]] bool IsActive() const noexcept {
++        return active;
++    }
++    [[nodiscard]] const std::string& ArchitectureName() const noexcept {
++        return architecture_name;
++    }
++
++    void LogActivation() const;
++
++private:
++    GpuArchitecture architecture{GpuArchitecture::Generic};
++    GpuOptimizationMode mode{GpuOptimizationMode::Disabled};
++    GpuCapabilities capabilities{};
++    GpuWorkarounds workarounds{};
++    GpuFastPaths fast_paths{};
++    bool mali_g720{};
++    bool active{};
++    u32 vendor_id{};
++    u32 device_id{};
++    VkDriverId driver_id{};
++    std::string architecture_name{"Generic"};
++    std::string model_name;
++};
++
++} // namespace Vulkan
