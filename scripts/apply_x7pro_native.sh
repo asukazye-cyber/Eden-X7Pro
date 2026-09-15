@@ -18,7 +18,8 @@ fi
 for patch_file in \
   "${repo_dir}/patches/0003-x7pro-native-profile-and-shaders.patch" \
   "${repo_dir}/patches/0004-x7pro-native-vulkan-integration.patch" \
-  "${repo_dir}/patches/0005-x7pro-android-package-and-ui.patch"; do
+  "${repo_dir}/patches/0005-x7pro-android-package-and-ui.patch" \
+  "${repo_dir}/patches/0006-x7pro-mali-native-ui-strings.patch"; do
   [[ -f "$patch_file" ]] || { echo "Missing patch: $patch_file" >&2; exit 1; }
   git -C "$eden_dir" apply --check "$patch_file"
   git -C "$eden_dir" apply "$patch_file"
