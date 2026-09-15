@@ -18,8 +18,7 @@ fi
 for patch_file in \
   "${repo_dir}/patches/0003-x7pro-native-profile-and-shaders.patch" \
   "${repo_dir}/patches/0004-x7pro-native-vulkan-integration.patch" \
-  "${repo_dir}/patches/0005-x7pro-android-package-and-ui.patch" \
-  "${repo_dir}/patches/0006-x7pro-mali-native-ui-strings.patch"; do
+  "${repo_dir}/patches/0005-x7pro-android-package-and-ui.patch"; do
   [[ -f "$patch_file" ]] || { echo "Missing patch: $patch_file" >&2; exit 1; }
   git -C "$eden_dir" apply --check "$patch_file"
   git -C "$eden_dir" apply "$patch_file"
@@ -27,6 +26,63 @@ done
 
 # The reviewed V1/V2 defaults are independent once the native changes are in place.
 bash "${script_dir}/apply_x7pro_v2.sh" "$eden_dir"
+
+# Add missing Mali native frame generation UI strings directly
+strings_xml="${eden_dir}/src/android/app/src/main/res/values/strings.xml"
+arrays_xml="${eden_dir}/src/android/app/src/main/res/values/arrays.xml"
+
+# Inject Mali Frame Gen strings into strings.xml before </resources>
+if ! grep -q "mali_native_frame_gen" "$strings_xml"; then
+  sed -i '/<\/resources>/i\
+    <string name="mali_native_frame_gen">Mali Native Frame Generation (Experimental)</string>\
+    <string name="mali_native_frame_gen_description">Uses the POCO X7 Pro Vulkan compute path to estimate motion between two GPU-resident frames and generate one midpoint frame. It never requires Lossless.dll, Vulkan memory model, or VK_EXT_robustness2 support.</string>\
+    <string name="mali_native_frame_gen_mode">Mode</string>\
+    <string name="mali_native_frame_gen_mode_description">Performance uses a smaller motion search; Balanced is the POCO X7 Pro default; Quality spends more GPU time on motion estimation; Adaptive adjusts based on scene complexity.</string>\
+    <string name="mali_native_frame_gen_mode_performance">Performance</string>\
+    <string name="mali_native_frame_gen_mode_balanced">Balanced</string>\
+    <string name="mali_native_frame_gen_mode_quality">Quality</string>\
+    <string name="mali_native_frame_gen_mode_adaptive">Adaptive</string>\
+    <string name="mali_native_frame_gen_target">Target output rate</string>\
+    <string name="mali_native_frame_gen_target_description">The visual target for the experimental pacing policy. The emulator never changes the game'"'"'s actual emulation speed.</string>\
+    <string name="mali_native_frame_gen_target_auto">Auto</string>\
+    <string name="mali_native_frame_gen_target_40">40 FPS</string>\
+    <string name="mali_native_frame_gen_target_60">60 FPS</string>\
+    <string name="mali_native_frame_gen_debug_overlay">Mali FG debug overlay</string>\
+    <string name="mali_native_frame_gen_debug_overlay_description">Shows profile state plus real/generated frame counters in the performance overlay and emits periodic [MALI-FG] log entries.</string>' "$strings_xml"
+  echo "[Mali-FG] Added UI strings to strings.xml"
+fi
+
+# Inject Mali Frame Gen arrays into arrays.xml before </resources>
+if ! grep -q "maliNativeFrameGenModeNames" "$arrays_xml"; then
+  sed -i '/<\/resources>/i\
+\
+    <string-array name="maliNativeFrameGenModeNames">\
+        <item>@string/mali_native_frame_gen_mode_performance</item>\
+        <item>@string/mali_native_frame_gen_mode_balanced</item>\
+        <item>@string/mali_native_frame_gen_mode_quality</item>\
+        <item>@string/mali_native_frame_gen_mode_adaptive</item>\
+    </string-array>\
+\
+    <integer-array name="maliNativeFrameGenModeValues">\
+        <item>0</item>\
+        <item>1</item>\
+        <item>2</item>\
+        <item>3</item>\
+    </integer-array>\
+\
+    <string-array name="maliNativeFrameGenTargetNames">\
+        <item>@string/mali_native_frame_gen_target_auto</item>\
+        <item>@string/mali_native_frame_gen_target_40</item>\
+        <item>@string/mali_native_frame_gen_target_60</item>\
+    </string-array>\
+\
+    <integer-array name="maliNativeFrameGenTargetValues">\
+        <item>0</item>\
+        <item>40</item>\
+        <item>60</item>\
+    </integer-array>' "$arrays_xml"
+  echo "[Mali-FG] Added UI arrays to arrays.xml"
+fi
 
 # The compute implementation is kept as a compressed, source-only asset to avoid carrying an
 # additional copy of the whole upstream tree. It is decompressed deterministically into the file
