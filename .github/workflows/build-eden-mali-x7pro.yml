@@ -2,6 +2,8 @@ name: Build Eden Mali X7 Pro
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -54,12 +56,15 @@ jobs:
         shell: bash
         run: bash scripts/apply_x7pro_native.sh "$GITHUB_WORKSPACE/eden"
 
-      - name: Validate Build19 policy and integration guardrails
+      - name: Validate Build19 and Build21 policy/integration guardrails
         shell: bash
         run: |
           clang++ -std=c++20 -O2 -Wall -Wextra -Werror -I eden/src tests/build19_policy.cpp -o /tmp/build19-policy-test
           /tmp/build19-policy-test
+          clang++ -std=c++20 -O2 -Wall -Wextra -Werror -I tests/stubs -I eden/src tests/build21_policy.cpp -o /tmp/build21-policy-test
+          /tmp/build21-policy-test
           python3 tests/validate_build19.py eden
+          python3 tests/validate_build21.py eden
 
       - name: Build independent Mali X7 Pro APK
         # Keep policy validation separate from Android compilation and hardware benchmarks.
@@ -68,7 +73,21 @@ jobs:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           CCACHE: 'true'
-        run: bash scripts/build_x7pro_native.sh "$GITHUB_WORKSPACE/eden"
+        run: |
+          set +e
+          bash scripts/build_x7pro_native.sh "$GITHUB_WORKSPACE/eden" 2>&1 | tee /tmp/build21-android.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if (( status != 0 )); then
+            # Keep compiler diagnostics visible through the Checks API even when the runner's raw
+            # log storage is unavailable to a reviewer.
+            summary="$(grep -E '(^|[[:space:]])(error:|fatal error:)|FAILED|What went wrong|Execution failed' /tmp/build21-android.log | tail -80 || true)"
+            summary="${summary//'%'/'%25'}"
+            summary="${summary//$'\r'/'%0D'}"
+            summary="${summary//$'\n'/'%0A'}"
+            echo "::error title=Android ARM64 build failed::${summary:-See the Build independent Mali X7 Pro APK step log.}"
+            exit "$status"
+          fi
 
       - name: Verify package and native payload
         shell: bash
