@@ -12,24 +12,12 @@ if [[ ! -d "$eden_dir/src/android" || ! -f "$eden_dir/CMakeLists.txt" ]]; then
   exit 1
 fi
 
-# Apply the native patches to the pinned upstream revision first. V1 changes the Android
-# asynchronous-GPU default next to the native frame-generation settings, so applying it first
-# would make git correctly reject the native hunk as ambiguous.
-for patch_file in \
-  "${repo_dir}/patches/0003-x7pro-native-profile-and-shaders.patch" \
-  "${repo_dir}/patches/0004-x7pro-native-vulkan-integration.patch" \
-  "${repo_dir}/patches/0005-x7pro-android-package-and-ui.patch"; do
-  [[ -f "$patch_file" ]] || { echo "Missing patch: $patch_file" >&2; exit 1; }
-  git -C "$eden_dir" apply --check "$patch_file"
-  git -C "$eden_dir" apply "$patch_file"
-done
-
-# The reviewed V1/V2 defaults are independent once the native changes are in place.
-bash "${script_dir}/apply_x7pro_v2.sh" "$eden_dir"
-
-# Add missing Mali native frame generation UI strings directly
+# Inject Mali native frame generation UI strings and arrays BEFORE applying patches
+# This ensures the resources exist when patch 0005 tries to reference them
 strings_xml="${eden_dir}/src/android/app/src/main/res/values/strings.xml"
 arrays_xml="${eden_dir}/src/android/app/src/main/res/values/arrays.xml"
+
+echo "[Mali-FG] Pre-injecting UI resources before patch application..."
 
 # Inject Mali Frame Gen strings into strings.xml before </resources>
 if ! grep -q "mali_native_frame_gen" "$strings_xml"; then
@@ -49,7 +37,7 @@ if ! grep -q "mali_native_frame_gen" "$strings_xml"; then
     <string name="mali_native_frame_gen_target_60">60 FPS</string>\
     <string name="mali_native_frame_gen_debug_overlay">Mali FG debug overlay</string>\
     <string name="mali_native_frame_gen_debug_overlay_description">Shows profile state plus real/generated frame counters in the performance overlay and emits periodic [MALI-FG] log entries.</string>' "$strings_xml"
-  echo "[Mali-FG] Added UI strings to strings.xml"
+  echo "[Mali-FG] Injected strings into strings.xml"
 fi
 
 # Inject Mali Frame Gen arrays into arrays.xml before </resources>
@@ -81,8 +69,23 @@ if ! grep -q "maliNativeFrameGenModeNames" "$arrays_xml"; then
         <item>40</item>\
         <item>60</item>\
     </integer-array>' "$arrays_xml"
-  echo "[Mali-FG] Added UI arrays to arrays.xml"
+  echo "[Mali-FG] Injected arrays into arrays.xml"
 fi
+
+# Apply the native patches to the pinned upstream revision first. V1 changes the Android
+# asynchronous-GPU default next to the native frame-generation settings, so applying it first
+# would make git correctly reject the native hunk as ambiguous.
+for patch_file in \
+  "${repo_dir}/patches/0003-x7pro-native-profile-and-shaders.patch" \
+  "${repo_dir}/patches/0004-x7pro-native-vulkan-integration.patch" \
+  "${repo_dir}/patches/0005-x7pro-android-package-and-ui.patch"; do
+  [[ -f "$patch_file" ]] || { echo "Missing patch: $patch_file" >&2; exit 1; }
+  git -C "$eden_dir" apply --check "$patch_file"
+  git -C "$eden_dir" apply "$patch_file"
+done
+
+# The reviewed V1/V2 defaults are independent once the native changes are in place.
+bash "${script_dir}/apply_x7pro_v2.sh" "$eden_dir"
 
 # The compute implementation is kept as a compressed, source-only asset to avoid carrying an
 # additional copy of the whole upstream tree. It is decompressed deterministically into the file
