@@ -1,0 +1,1596 @@
+diff --git a/src/android/app/src/main/jni/native.cpp b/src/android/app/src/main/jni/native.cpp
+index e1bf0a8..113ddd0 100644
+--- a/src/android/app/src/main/jni/native.cpp
++++ b/src/android/app/src/main/jni/native.cpp
+@@ -45,6 +45,7 @@ extern "C" {
+ #include "common/android/id_cache.h"
+ #ifdef HAS_MALI_X7PRO_FG
+ #include "common/android/poco_x7pro_profile.h"
++#include "common/android/x7pro_telemetry.h"
+ #endif
+ #include "common/dynamic_library.h"
+ #include "common/fs/fs_util.h"
+@@ -340,6 +341,9 @@ Core::SystemResultStatus EmulationSession::InitializeEmulation(const std::string
+     }
+ 
+     // Complete initialization.
++    std::string x7pro_game_title;
++    m_system.GetAppLoader().ReadTitle(x7pro_game_title);
++    Common::Android::X7Pro::StartSession(x7pro_game_title, m_system.GetApplicationProcessProgramID());
+     m_system.GPU().Start();
+     m_system.GetCpuManager().OnGpuReady();
+     m_system.RegisterExitCallback([&] { HaltEmulation(); });
+@@ -378,6 +382,7 @@ void EmulationSession::ShutdownEmulation() {
+     if (m_load_result == Core::SystemResultStatus::Success) {
+         m_system.DetachDebugger();
+         m_system.ShutdownMainProcess();
++        Common::Android::X7Pro::StopSession();
+         m_load_result = Core::SystemResultStatus::ErrorNotInitialized;
+         m_window.reset();
+         OnEmulationStopped(Core::SystemResultStatus::Success);
+diff --git a/src/common/CMakeLists.txt b/src/common/CMakeLists.txt
+index fcd04ff..8506277 100644
+--- a/src/common/CMakeLists.txt
++++ b/src/common/CMakeLists.txt
+@@ -168,6 +168,9 @@ if(ANDROID)
+         android/android_common.h
+         android/poco_x7pro_profile.cpp
+         android/poco_x7pro_profile.h
++        android/x7pro_governor.h
++        android/x7pro_telemetry.h
++        android/x7pro_telemetry.cpp
+         android/id_cache.cpp
+         android/id_cache.h
+         android/multiplayer/multiplayer.cpp
+diff --git a/src/common/android/poco_x7pro_profile.cpp b/src/common/android/poco_x7pro_profile.cpp
+index 22497d0..6baf2c2 100644
+--- a/src/common/android/poco_x7pro_profile.cpp
++++ b/src/common/android/poco_x7pro_profile.cpp
+@@ -14,6 +14,7 @@
+ #include <vulkan/vulkan_core.h>
+ 
+ #include "common/android/poco_x7pro_profile.h"
++#include "common/android/x7pro_telemetry.h"
+ #include "common/logging.h"
+ #include "common/settings.h"
+ #include "common/thread.h"
+@@ -32,15 +33,6 @@ struct ProfileState {
+     bool logged{};
+     std::string status{"device-not-detected"};
+     std::string frame_gen_phase{"inactive"};
+-    u64 real_frames{};
+-    u64 generated_frames{};
+-    u64 dropped_synthetic_frames{};
+-    std::chrono::steady_clock::time_point last_real_frame{};
+-    f64 real_frame_ms{};
+-    u64 real_frames_over_budget{};
+-    std::array<f64, 180> frame_samples{};
+-    size_t frame_sample_count{};
+-    size_t next_frame_sample{};
+ };
+ 
+ ProfileState& State() {
+@@ -90,36 +82,6 @@ void RefreshProfileStatusLocked(ProfileState& state) {
+     }
+ }
+ 
+-std::string FormatMilliseconds(f64 value) {
+-    if (value <= 0.0) {
+-        return "N/A";
+-    }
+-    std::ostringstream stream;
+-    stream << std::fixed << std::setprecision(2) << value << " ms";
+-    return stream.str();
+-}
+-
+-std::string FormatFps(f64 frame_time) {
+-    if (frame_time <= 0.0) {
+-        return "N/A";
+-    }
+-    std::ostringstream stream;
+-    stream << std::fixed << std::setprecision(1) << (1000.0 / frame_time) << " FPS";
+-    return stream.str();
+-}
+-
+-f64 Percentile(const ProfileState& state, f64 percentile) {
+-    if (state.frame_sample_count == 0) {
+-        return 0.0;
+-    }
+-    std::array<f64, 180> samples{};
+-    std::copy_n(state.frame_samples.begin(), state.frame_sample_count, samples.begin());
+-    std::sort(samples.begin(), samples.begin() + state.frame_sample_count);
+-    const size_t index = std::min(state.frame_sample_count - 1,
+-                                  static_cast<size_t>((state.frame_sample_count - 1) * percentile));
+-    return samples[index];
+-}
+-
+ const char* RoleName(PocoX7ProThreadRole role) {
+     switch (role) {
+     case PocoX7ProThreadRole::GpuSubmission:
+@@ -200,52 +162,10 @@ void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view
+     }
+ }
+ 
+-void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64, u64 generated_frames) {
++void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64, u64) {
+     auto& state = State();
+     std::scoped_lock lock{state.mutex};
+     state.frame_gen_phase = phase;
+-    state.generated_frames = generated_frames;
+-}
+-
+-void RecordPocoX7ProRealFrame() {
+-    auto& state = State();
+-    const auto now = std::chrono::steady_clock::now();
+-    std::scoped_lock lock{state.mutex};
+-    if (state.last_real_frame.time_since_epoch().count() != 0) {
+-        const f64 frame_time =
+-            std::chrono::duration<f64, std::milli>(now - state.last_real_frame).count();
+-        state.real_frame_ms = frame_time;
+-        state.real_frames_over_budget += frame_time > 33.333 ? 1 : 0;
+-        state.frame_samples[state.next_frame_sample] = frame_time;
+-        state.next_frame_sample = (state.next_frame_sample + 1) % state.frame_samples.size();
+-        state.frame_sample_count = std::min(state.frame_sample_count + 1, state.frame_samples.size());
+-    }
+-    state.last_real_frame = now;
+-    ++state.real_frames;
+-}
+-
+-bool ShouldGeneratePocoX7ProFrame() {
+-    DetectPocoX7ProDevice();
+-    auto& state = State();
+-    std::scoped_lock lock{state.mutex};
+-    RefreshProfileStatusLocked(state);
+-    if (!Settings::values.mali_native_frame_gen.GetValue() || !HardwareOptimizationEnabledLocked(state)) {
+-        return false;
+-    }
+-    if (Settings::values.x7pro_fg_governor.GetValue() == 0) {
+-        return true;
+-    }
+-    // Auto governor gives source frames priority. Locked 30 uses the actual 33.333 ms budget;
+-    // balanced has a small tolerance but still drops a synthetic frame before adding more work.
+-    const u32 performance_mode = Settings::values.x7pro_performance_governor.GetValue();
+-    // Off keeps the independent FG safety guard; Balanced relaxes it slightly, while Locked 30
+-    // makes the actual 33.333 ms source-frame budget the priority.
+-    const f64 budget = performance_mode == 2 ? 33.333 : performance_mode == 1 ? 36.0 : 34.5;
+-    const bool generate = state.real_frame_ms == 0.0 || state.real_frame_ms <= budget;
+-    if (!generate) {
+-        ++state.dropped_synthetic_frames;
+-    }
+-    return generate;
+ }
+ 
+ bool IsPocoX7ProProfileActive() {
+@@ -269,22 +189,19 @@ std::string PocoX7ProFrameGenDiagnostics() {
+     auto& state = State();
+     std::scoped_lock lock{state.mutex};
+     return "Mali FG: " + state.frame_gen_phase + " | profile=" + state.status +
+-           " | real=" + std::to_string(state.real_frames) +
+-           " | generated=" + std::to_string(state.generated_frames) +
++           " | counters: see detailed performance overlay" +
+            " | gpu=" + state.vulkan_model + " | driver=" + state.vulkan_driver;
+ }
+ 
+ std::string PocoX7ProPerformanceDiagnostics() {
+     DetectPocoX7ProDevice();
+     auto& state = State();
+-    std::scoped_lock lock{state.mutex};
++    std::unique_lock lock{state.mutex};
+     RefreshProfileStatusLocked(state);
+ 
+     const bool profile_active = HardwareOptimizationEnabledLocked(state);
+     const bool pacing_active = profile_active &&
+                                Settings::values.x7pro_performance_governor.GetValue() != 0;
+-    const f64 p95 = Percentile(state, 0.95);
+-    const f64 p99 = Percentile(state, 0.99);
+     std::ostringstream stream;
+     stream << "Device: " << (state.poco_x7_pro ? "POCO X7 Pro / compatible target" : "N/A") << '\n'
+            << "SoC profile: " << (state.dimensity_8400 ? "Dimensity 8400 family" : "N/A") << '\n'
+@@ -292,22 +209,10 @@ std::string PocoX7ProPerformanceDiagnostics() {
+            << "Hardware Profile: " << (profile_active ? "ACTIVE" : "INACTIVE") << '\n'
+            << "CPU Optimization: " << (profile_active ? "ACTIVE" : "INACTIVE") << '\n'
+            << "Mali Optimization: " << (profile_active ? "ACTIVE" : "INACTIVE") << '\n'
+-           << "Frame Pacing: " << (pacing_active ? "ACTIVE" : "INACTIVE") << '\n'
+-           << "Real FPS: " << FormatFps(state.real_frame_ms) << '\n'
+-           << "Presented FPS: N/A" << '\n'
+-           << "Frame Time: " << FormatMilliseconds(state.real_frame_ms) << '\n'
+-           << "CPU Time: N/A" << '\n'
+-           << "GPU Time: N/A" << '\n'
+-           << "Shader Time: N/A" << '\n'
+-           << "Present Time: N/A" << '\n'
+-           << "FG Time: N/A" << '\n'
+-           << "1% Low (real): " << FormatFps(p99) << '\n'
+-           << "P95: " << FormatMilliseconds(p95) << '\n'
+-           << "P99: " << FormatMilliseconds(p99) << '\n'
+-           << "Bottleneck: N/A" << '\n'
+-           << "Synthetic Frames: " << state.generated_frames << '\n'
+-           << "Dropped Synthetic Frames: " << state.dropped_synthetic_frames;
+-    return stream.str();
++           << "Frame Pacing: " << (pacing_active ? "ACTIVE (configured)" : "INACTIVE") << '\n'
++           << "Driver: " << state.vulkan_driver << '\n';
++    lock.unlock();
++    return stream.str() + X7Pro::Diagnostics();
+ }
+ 
+ void ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole role) {
+diff --git a/src/common/android/poco_x7pro_profile.h b/src/common/android/poco_x7pro_profile.h
+index 0b58a19..8ed03f5 100644
+--- a/src/common/android/poco_x7pro_profile.h
++++ b/src/common/android/poco_x7pro_profile.h
+@@ -25,8 +25,6 @@ void DetectPocoX7ProDevice();
+ void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view model_name,
+                                  u32 api_version, u32 driver_version);
+ void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64 real_frames, u64 generated_frames);
+-void RecordPocoX7ProRealFrame();
+-[[nodiscard]] bool ShouldGeneratePocoX7ProFrame();
+ 
+ [[nodiscard]] bool IsPocoX7ProProfileActive();
+ [[nodiscard]] std::string PocoX7ProProfileStatus();
+diff --git a/src/common/android/x7pro_governor.h b/src/common/android/x7pro_governor.h
+new file mode 100644
+index 0000000..4db5b6f
+--- /dev/null
++++ b/src/common/android/x7pro_governor.h
+@@ -0,0 +1,127 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++#include <numeric>
++
++namespace Common::Android::X7Pro {
++enum class Drop : size_t {
++    Budget, RealDeadline, Queue, PresentDeadline, Source, Sync, Stale, Thermal, Other, Count
++};
++inline constexpr std::array DropNames{"No GPU Budget", "Real Frame Deadline", "Queue Backpressure",
++    "Present Deadline Miss", "Source Frame Invalid", "Synchronization", "Duplicate/Stale",
++    "Thermal Governor", "Other"};
++enum class Phase { Disabled, Probing, Active, Constrained };
++inline constexpr const char* PhaseName(Phase phase) {
++    switch (phase) {
++    case Phase::Disabled: return "DISABLED_TEMPORARILY";
++    case Phase::Probing: return "PROBING";
++    case Phase::Active: return "ACTIVE";
++    case Phase::Constrained: return "CONSTRAINED";
++    }
++    return "UNKNOWN";
++}
++
++// Bounded rolling window; cumulative sums are separate, never called full-session percentiles.
++template <size_t N = 300> struct Samples {
++    std::array<double, N> values{};
++    size_t count{}, next{};
++    uint64_t total_count{};
++    double total{}, maximum{};
++    void Add(double value) {
++        if (!std::isfinite(value) || value < 0) return;
++        values[next] = value;
++        next = (next + 1) % N;
++        count = std::min(count + 1, N);
++        ++total_count;
++        total += value;
++        maximum = std::max(maximum, value);
++    }
++    double Average() const {
++        return count ? std::accumulate(values.begin(), values.begin() + count, 0.0) / count : 0;
++    }
++    double Percentile(double p) const {
++        if (!count) return 0;
++        auto sorted = values;
++        std::sort(sorted.begin(), sorted.begin() + count);
++        const auto rank = static_cast<size_t>(std::ceil(std::clamp(p, 0.0, 1.0) * count));
++        return sorted[rank ? rank - 1 : 0];
++    }
++    double SlowestOnePercentMean() const {
++        if (!count) return 0;
++        auto sorted = values;
++        std::sort(sorted.begin(), sorted.begin() + count);
++        const auto slow = std::max<size_t>(1, (count + 99) / 100);
++        return std::accumulate(sorted.begin() + count - slow, sorted.begin() + count, 0.0) / slow;
++    }
++};
++
++struct Evidence {
++    double real_ms{}, real_p95{}, real_p99{};
++    double cpu_core_ms{}, gpu_ms{}, fg_ms{}, present_ms{};
++    bool gpu_valid{}, cpu_valid{}, fg_valid{}, queue_ready{}, automatic{true};
++    int thermal{-1};
++};
++struct Decision { bool admit{}; Drop reason{Drop::Other}; bool reduced_quality{true}; };
++
++// Policy only: no sleep, graphics calls, game-speed changes or device detection.
++// Thresholds are conservative starting values, not calibrated hardware benchmark results.
++class Governor {
++public:
++    static constexpr double Budget = 1000.0 / 30.0;
++    Phase phase{Phase::Disabled};
++    double margin{5.0};
++    unsigned recovery{}, admitted{}, cooldown{};
++    Drop suspension_reason{Drop::Budget};
++
++    Decision Decide(const Evidence& e) {
++        margin = std::clamp(3.0 + std::max(0.0, e.real_p95 - Budget) * 0.5, 3.0, 9.0);
++        auto reject = [&](Drop reason, bool severe) {
++            admitted = 0;
++            recovery = 0;
++            phase = severe ? Phase::Disabled : Phase::Constrained;
++            cooldown = std::max(cooldown, severe ? 60U : 15U);
++            suspension_reason = reason;
++            return Decision{false, reason, true};
++        };
++        if (e.thermal >= 3) return reject(Drop::Thermal, true);
++        if (!e.queue_ready) return reject(Drop::Queue, false);
++        // An unmeasured/unsupported GPU cannot safely pass AUTO admission.
++        if (!e.gpu_valid || !e.cpu_valid) return reject(Drop::Budget, false);
++        if (e.real_ms > 37.0 || e.real_p99 > 50.0)
++            return reject(Drop::RealDeadline, e.real_ms > 45.0 || e.real_p99 > 60.0);
++        const double real_cost = std::max(e.gpu_ms, e.cpu_core_ms);
++        const double predicted_fg = e.fg_valid ? std::max(1.0, e.fg_ms * 1.25) : 6.0;
++        if (real_cost + predicted_fg + std::max(0.0, e.present_ms) + margin >= Budget)
++            return reject(Drop::Budget, false);
++        if (!e.automatic) {
++            phase = Phase::Probing;
++            return {true, Drop::Other, false}; // Manual quality; hard safety checks remain mandatory.
++        }
++        if (cooldown) {
++            --cooldown;
++            return {false, suspension_reason, true};
++        }
++        if (phase == Phase::Disabled || phase == Phase::Constrained) {
++            if (++recovery < 30) return {false, suspension_reason, true};
++            phase = Phase::Probing;
++            admitted = 0;
++        }
++        if (++admitted >= 60 && e.fg_valid && e.real_p95 < 35.5) phase = Phase::Active;
++        // Preserve the configured image scale; reduce only search radius (no reallocations).
++        const bool reduced = phase != Phase::Active || e.thermal >= 2 ||
++            real_cost + predicted_fg + margin + 4.0 >= Budget;
++        return {true, Drop::Other, reduced};
++    }
++};
++
++inline uint64_t TimestampDelta(uint64_t begin, uint64_t end, unsigned valid_bits) {
++    if (!valid_bits) return 0;
++    const uint64_t mask = valid_bits >= 64 ? ~uint64_t{0} : (uint64_t{1} << valid_bits) - 1;
++    return (end - begin) & mask;
++}
++} // namespace Common::Android::X7Pro
+diff --git a/src/common/android/x7pro_telemetry.cpp b/src/common/android/x7pro_telemetry.cpp
+new file mode 100644
+index 0000000..496d1d9
+--- /dev/null
++++ b/src/common/android/x7pro_telemetry.cpp
+@@ -0,0 +1,289 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#include "common/android/x7pro_telemetry.h"
++#include <android/thermal.h>
++#include <atomic>
++#include <dlfcn.h>
++#include <iomanip>
++#include <mutex>
++#include <sstream>
++#include <time.h>
++#include "common/android/poco_x7pro_profile.h"
++#include "common/logging.h"
++#include "common/settings.h"
++
++namespace Common::Android::X7Pro {
++namespace {
++using Clock = std::chrono::steady_clock;
++constexpr std::array MetricNames{"CPU busiest core/real interval", "CPU sum/real interval",
++    "GPU real submissions", "FG CPU preparation", "FG GPU (history + compute)",
++    "Shader translation CPU wall", "Pipeline creation CPU wall", "Swapchain acquire wait",
++    "Present queue age", "QueuePresent CPU call", "Render frame/fence wait", "Composite CPU wall"};
++constexpr std::array CounterNames{"real_produced", "real_presented", "synthetic_attempted",
++    "synthetic_submitted", "synthetic_generated_gpu_complete", "synthetic_presented",
++    "synthetic_skipped_or_dropped"};
++constexpr std::array Bottlenecks{"CPU BOUND", "GPU BOUND", "SHADER BOUND", "SYNC BOUND",
++    "PRESENT BOUND", "FG LIMITED", "THERMAL LIMITED", "BALANCED", "UNKNOWN"};
++std::atomic_bool enabled{};
++std::array<std::atomic<int64_t>, 4> cpu_ns{};
++std::array<std::atomic_bool, 4> cpu_seen{};
++std::atomic<int> thermal_status{-1};
++void ThermalChanged(void*, AThermalStatus status) { thermal_status.store(status, std::memory_order_relaxed); }
++struct State {
++    std::mutex mutex;
++    std::array<Samples<>, static_cast<size_t>(Metric::Count)> metrics{};
++    Samples<> real, presented;
++    std::array<uint64_t, static_cast<size_t>(Counter::Count)> counters{};
++    std::array<uint64_t, static_cast<size_t>(Drop::Count)> drops{};
++    std::array<uint64_t, Bottlenecks.size()> bottlenecks{};
++    Clock::time_point start{}, last_real{}, last_present{}, last_log{}, last_thermal{}, last_gpu{};
++    Clock::time_point last_compile{}, last_spike{};
++    double interval_compile_ms{}, interval_compile_max{}, previous_compile_ms{}, previous_compile_max{};
++    uint64_t interval_compile_events{}, previous_compile_events{};
++    Governor governor;
++    bool reduced{true};
++    std::string game, gpu_reason{"waiting for asynchronous timestamp results"};
++    std::string gpu, driver;
++    uint64_t title_id{};
++    int thermal{-1};
++    AThermalManager* thermal_manager{};
++    using AcquireThermal = AThermalManager* (*)();
++    using ReadThermal = AThermalStatus (*)(AThermalManager*);
++    using ReleaseThermal = void (*)(AThermalManager*);
++    using ThermalListener = int (*)(AThermalManager*, AThermal_StatusCallback, void*);
++    ReleaseThermal release_thermal{};
++    ThermalListener unregister_thermal{};
++    void InitializeThermal() {
++        if (thermal_manager) return;
++        // Runtime lookup retains the safe Android <30 fallback of other build variants.
++        const auto acquire = reinterpret_cast<AcquireThermal>(dlsym(RTLD_DEFAULT, "AThermal_acquireManager"));
++        const auto read = reinterpret_cast<ReadThermal>(dlsym(RTLD_DEFAULT, "AThermal_getCurrentThermalStatus"));
++        const auto reg = reinterpret_cast<ThermalListener>(dlsym(RTLD_DEFAULT, "AThermal_registerThermalStatusListener"));
++        release_thermal = reinterpret_cast<ReleaseThermal>(dlsym(RTLD_DEFAULT, "AThermal_releaseManager"));
++        unregister_thermal = reinterpret_cast<ThermalListener>(dlsym(RTLD_DEFAULT, "AThermal_unregisterThermalStatusListener"));
++        if (!acquire || !read || !reg || !release_thermal || !unregister_thermal) return;
++        thermal_manager = acquire();
++        if (!thermal_manager) return;
++        thermal_status = read(thermal_manager); // Startup only, never a binder call in the frame loop.
++        if (reg(thermal_manager, ThermalChanged, nullptr) != 0) {
++            thermal_status = -1; release_thermal(thermal_manager); thermal_manager = nullptr;
++        }
++    }
++    ~State() {
++        if (thermal_manager) {
++            unregister_thermal(thermal_manager, ThermalChanged, nullptr);
++            release_thermal(thermal_manager);
++        }
++    }
++};
++State& Get() { static State state; return state; }
++Samples<>& M(State& s, Metric metric) { return s.metrics[static_cast<size_t>(metric)]; }
++double Age(Clock::time_point t) { return std::chrono::duration<double, std::milli>(Clock::now() - t).count(); }
++size_t Bottleneck(State& s) {
++    if (s.thermal >= 3) return 6;
++    if (Age(s.last_compile) < 200 && s.interval_compile_max > 8) return 2;
++    if (M(s, Metric::FrameWait).Percentile(.95) > 8) return 3;
++    if (M(s, Metric::Acquire).Percentile(.95) > 8 || M(s, Metric::QueueAge).Percentile(.95) > 16) return 4;
++    if (M(s, Metric::GpuReal).Percentile(.95) > 28) return 1;
++    if (M(s, Metric::CpuCore).Percentile(.95) > 28) return 0;
++    if (Settings::values.mali_native_frame_gen.GetValue() && s.governor.phase == Phase::Constrained &&
++        M(s, Metric::FgGpu).count) return 5;
++    if (M(s, Metric::GpuReal).count >= 30 && M(s, Metric::CpuCore).count >= 30 && s.real.Percentile(.95) < 35.5)
++        return 7;
++    return 8;
++}
++std::string Value(const Samples<>& samples) {
++    if (!samples.count) return "N/A";
++    std::ostringstream out;
++    out << std::fixed << std::setprecision(2) << samples.Average() << " ms";
++    return out.str();
++}
++int64_t ThreadNs() {
++    timespec t{};
++    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t) != 0) return 0;
++    return int64_t{t.tv_sec} * 1000000000 + t.tv_nsec;
++}
++} // namespace
++bool Enabled() { return enabled.load(std::memory_order_relaxed); }
++void SetDevice(std::string_view gpu, std::string_view driver) {
++    auto& s = Get(); std::scoped_lock lock{s.mutex}; s.gpu = gpu; s.driver = driver;
++}
++void StartSession(std::string_view game, uint64_t title_id) {
++    const bool active = IsPocoX7ProProfileActive() && (Settings::values.mali_native_frame_gen.GetValue() ||
++        Settings::values.x7pro_detailed_performance_overlay.GetValue());
++    auto& s = Get();
++    if (active) s.InitializeThermal();
++    std::scoped_lock lock{s.mutex};
++    s.metrics = {}; s.real = {}; s.presented = {}; s.counters = {}; s.drops = {};
++    s.bottlenecks = {}; s.governor = {}; s.last_real = {}; s.last_present = {}; s.last_gpu = {};
++    s.start = s.last_log = Clock::now(); s.game = game; s.title_id = title_id;
++    s.last_compile = {}; s.last_spike = {};
++    s.interval_compile_ms = s.interval_compile_max = s.previous_compile_ms = s.previous_compile_max = 0;
++    s.interval_compile_events = s.previous_compile_events = 0;
++    for (auto& c : cpu_ns) c = 0;
++    for (auto& c : cpu_seen) c = false;
++    enabled = active;
++}
++void StopSession() {
++    if (Enabled()) LOG_INFO(Render_Vulkan, "[X7PRO-B19-SUMMARY]\n{}", Diagnostics(true));
++    enabled = false;
++}
++void RealFrame() {
++    enabled = IsPocoX7ProProfileActive() && (Settings::values.mali_native_frame_gen.GetValue() ||
++        Settings::values.x7pro_detailed_performance_overlay.GetValue());
++    if (!Enabled()) return;
++    auto& s = Get();
++    bool log = false, spike = false;
++    {
++        std::scoped_lock lock{s.mutex};
++        const auto now = Clock::now();
++        if (s.last_real != Clock::time_point{}) {
++            const double ms = std::chrono::duration<double, std::milli>(now - s.last_real).count();
++            // Pauses/surface loss are not gameplay frame samples. Re-warm the governor.
++            if (ms < 500) s.real.Add(ms); else s.governor = {};
++            if (ms > 40 && ms < 500 && Age(s.last_spike) >= 1000) {
++                spike = true; s.last_spike = now;
++            }
++        }
++        s.last_real = now;
++        ++s.counters[static_cast<size_t>(Counter::RealProduced)];
++        double sum = 0, maximum = 0;
++        bool seen = false;
++        for (size_t i = 0; i < cpu_ns.size(); ++i) {
++            seen |= cpu_seen[i].load(std::memory_order_relaxed);
++            const double ms = cpu_ns[i].exchange(0, std::memory_order_relaxed) / 1e6;
++            sum += ms; maximum = std::max(maximum, ms);
++        }
++        if (seen) { M(s, Metric::CpuSum).Add(sum); M(s, Metric::CpuCore).Add(maximum); }
++        s.thermal = thermal_status.load(std::memory_order_relaxed);
++        ++s.bottlenecks[Bottleneck(s)];
++        log = Age(s.last_log) >= 10000;
++        if (log) {
++            s.last_log = now;
++            s.previous_compile_ms = s.interval_compile_ms;
++            s.previous_compile_max = s.interval_compile_max;
++            s.previous_compile_events = s.interval_compile_events;
++            s.interval_compile_ms = s.interval_compile_max = 0;
++            s.interval_compile_events = 0;
++        }
++    }
++    if (log) LOG_INFO(Render_Vulkan, "[X7PRO-B19-SUMMARY]\n{}", Diagnostics(true));
++    else if (spike) LOG_INFO(Render_Vulkan, "[X7PRO-B19-SPIKE] asynchronous rolling evidence, not causal proof\n{}", Diagnostics());
++}
++void Sample(Metric metric, double ms) {
++    if (!Enabled()) return;
++    auto& s = Get(); std::scoped_lock lock{s.mutex};
++    M(s, metric).Add(ms);
++    if (metric == Metric::Shader || metric == Metric::Pipeline) {
++        s.interval_compile_ms += ms;
++        s.interval_compile_max = std::max(s.interval_compile_max, ms);
++        ++s.interval_compile_events;
++        s.last_compile = Clock::now();
++    }
++    if (metric == Metric::GpuReal) s.last_gpu = Clock::now();
++}
++void Count(Counter counter) {
++    if (!Enabled()) return;
++    auto& s = Get(); std::scoped_lock lock{s.mutex}; ++s.counters[static_cast<size_t>(counter)];
++}
++void Rejected(Drop reason) {
++    if (!Enabled()) return;
++    auto& s = Get(); std::scoped_lock lock{s.mutex};
++    ++s.drops[static_cast<size_t>(reason)]; ++s.counters[static_cast<size_t>(Counter::Dropped)];
++}
++void GpuUnavailable(std::string_view reason) {
++    auto& s = Get(); std::scoped_lock lock{s.mutex}; s.gpu_reason = reason;
++}
++Decision Admit(bool queue_ready) {
++    if (!Enabled() || !Settings::values.mali_native_frame_gen.GetValue()) return {};
++    auto& s = Get(); std::scoped_lock lock{s.mutex};
++    ++s.counters[static_cast<size_t>(Counter::Attempted)];
++    Evidence e{
++        .real_ms = s.real.count ? s.real.values[(s.real.next + 299) % 300] : 0,
++        .real_p95 = s.real.Percentile(.95), .real_p99 = s.real.Percentile(.99),
++        .cpu_core_ms = M(s, Metric::CpuCore).Percentile(.95),
++        .gpu_ms = M(s, Metric::GpuReal).Percentile(.95),
++        .fg_ms = M(s, Metric::FgGpu).Percentile(.95) + M(s, Metric::FgCpu).Percentile(.95),
++        .present_ms = M(s, Metric::Acquire).Percentile(.95) + M(s, Metric::PresentCall).Percentile(.95),
++        .gpu_valid = M(s, Metric::GpuReal).count >= 30 && Age(s.last_gpu) < 500,
++        .cpu_valid = M(s, Metric::CpuCore).count >= 30,
++        .fg_valid = M(s, Metric::FgGpu).count >= 2,
++        .queue_ready = queue_ready,
++        .automatic = Settings::values.x7pro_fg_governor.GetValue() != 0, .thermal = s.thermal};
++    auto decision = s.governor.Decide(e);
++    s.reduced = decision.reduced_quality;
++    if (!decision.admit) {
++        ++s.drops[static_cast<size_t>(decision.reason)];
++        ++s.counters[static_cast<size_t>(Counter::Dropped)];
++    }
++    return decision;
++}
++bool ReducedQuality() { auto& s = Get(); std::scoped_lock lock{s.mutex}; return s.reduced; }
++void Presented(bool synthetic) {
++    if (!Enabled()) return;
++    auto& s = Get(); std::scoped_lock lock{s.mutex};
++    const auto now = Clock::now();
++    if (s.last_present != Clock::time_point{} && Age(s.last_present) < 500)
++        s.presented.Add(std::chrono::duration<double, std::milli>(now - s.last_present).count());
++    s.last_present = now;
++    ++s.counters[static_cast<size_t>(synthetic ? Counter::SyntheticPresented : Counter::RealPresented)];
++}
++std::string Diagnostics(bool detailed) {
++    auto& s = Get(); std::scoped_lock lock{s.mutex};
++    std::ostringstream out; out << std::fixed << std::setprecision(2);
++    out << "REAL (last <=300 intervals)\n";
++    if (s.real.count) out << "FPS " << 1000 / s.real.Average() << " | frame " << s.real.Average()
++        << " ms\n1% low " << 1000 / s.real.SlowestOnePercentMean()
++        << " | P95 " << s.real.Percentile(.95) << " | P99 " << s.real.Percentile(.99) << " ms\n";
++    else out << "FPS / percentiles: N/A (warming up)\n";
++    out << "CPU core/sum: " << Value(M(s, Metric::CpuCore)) << " / " << Value(M(s, Metric::CpuSum))
++        << "\nGPU real: " << Value(M(s, Metric::GpuReal));
++    if (!M(s, Metric::GpuReal).count) out << " (" << s.gpu_reason << ')';
++    out << "\nAcquire / frame wait: " << Value(M(s, Metric::Acquire)) << " / " << Value(M(s, Metric::FrameWait))
++        << "\nShader / pipeline: " << M(s, Metric::Shader).total_count << " / " << M(s, Metric::Pipeline).total_count
++        << " events (CPU wall)\nFG: " << (Settings::values.mali_native_frame_gen.GetValue() ? PhaseName(s.governor.phase) : "OFF")
++        << " | margin " << s.governor.margin << " ms"
++        << "\nFG CPU / GPU: " << Value(M(s, Metric::FgCpu)) << " / " << Value(M(s, Metric::FgGpu))
++        << "\nPresented submissions: ";
++    if (s.presented.count) out << 1000 / s.presented.Average() << " FPS"; else out << "N/A";
++    out << "\nFG submitted/generated/presented/skipped: "
++        << s.counters[static_cast<size_t>(Counter::Submitted)] << '/'
++        << s.counters[static_cast<size_t>(Counter::Generated)] << '/'
++        << s.counters[static_cast<size_t>(Counter::SyntheticPresented)] << '/'
++        << s.counters[static_cast<size_t>(Counter::Dropped)]
++        << "\nBottleneck: " << Bottlenecks[Bottleneck(s)] << " | Thermal: ";
++    if (s.thermal < 0) out << "N/A (Android thermal service unavailable)"; else out << s.thermal;
++    if (!detailed) return out.str();
++    out << "\nDevice=POCO X7 Pro / Dimensity 8400 compatible target (profile gated) GPU=" << s.gpu
++        << " driver=" << s.driver;
++    out << "\nGame=" << s.game << " title_id=" << std::hex << s.title_id << std::dec
++        << " duration_wall_s=" << Age(s.start) / 1000;
++    if (s.real.total > 0) out << " real_average_active_fps=" << 1000 * s.real.total_count / s.real.total;
++    out << "\nPercentiles: nearest rank, rolling <=300 samples; 1% low = reciprocal slowest ceil(1%) mean."
++        << "\nCompile previous ~10s: events=" << s.previous_compile_events << " total_ms="
++        << s.previous_compile_ms << " max_ms=" << s.previous_compile_max
++        << "\nCompile current interval: events=" << s.interval_compile_events << " total_ms="
++        << s.interval_compile_ms << " max_ms=" << s.interval_compile_max
++        << "\nSkipped counters include recovery/cooldown, attributed to the last measured suspension reason."
++        << "\nPresent counts are successful vkQueuePresent submissions, NOT physical scanout."
++        << "\nCPU per-core sums are asynchronous guest-execution CPU time per real interval, not critical-path wall time."
++        << "\nGPU is main command-buffer timestamp elapsed time, excluding upload/present command buffers.";
++    for (size_t i = 0; i < s.metrics.size(); ++i) {
++        const auto& m = s.metrics[i];
++        out << '\n' << MetricNames[i] << ": " << Value(m);
++        if (m.count) out << " p95=" << m.Percentile(.95) << " p99=" << m.Percentile(.99)
++            << " session_count=" << m.total_count << " session_total_ms=" << m.total << " max_ms=" << m.maximum;
++    }
++    for (size_t i = 0; i < s.counters.size(); ++i) out << '\n' << CounterNames[i] << '=' << s.counters[i];
++    for (size_t i = 0; i < s.drops.size(); ++i) out << "\nDrop " << DropNames[i] << '=' << s.drops[i];
++    for (size_t i = 0; i < s.bottlenecks.size(); ++i) out << "\nBottleneck samples " << Bottlenecks[i] << '=' << s.bottlenecks[i];
++    return out.str();
++}
++GuestCpuScope::GuestCpuScope(size_t core_) : core{core_} {
++    if (Enabled() && core < cpu_ns.size()) start = ThreadNs();
++}
++GuestCpuScope::~GuestCpuScope() {
++    if (!start) return;
++    const int64_t end = ThreadNs();
++    if (end >= start) { cpu_ns[core].fetch_add(end - start, std::memory_order_relaxed); cpu_seen[core] = true; }
++}
++} // namespace Common::Android::X7Pro
+diff --git a/src/common/android/x7pro_telemetry.h b/src/common/android/x7pro_telemetry.h
+new file mode 100644
+index 0000000..daf9989
+--- /dev/null
++++ b/src/common/android/x7pro_telemetry.h
+@@ -0,0 +1,58 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++#include <chrono>
++#include <cstdint>
++#include <string>
++#include <string_view>
++#include "common/android/x7pro_governor.h"
++
++namespace Common::Android::X7Pro {
++enum class Metric : size_t {
++    CpuCore, CpuSum, GpuReal, FgCpu, FgGpu, Shader, Pipeline, Acquire, QueueAge,
++    PresentCall, FrameWait, Composite, Count
++};
++enum class Counter : size_t { RealProduced, RealPresented, Attempted, Submitted, Generated,
++    SyntheticPresented, Dropped, Count };
++bool Enabled();
++void SetDevice(std::string_view gpu, std::string_view driver);
++void StartSession(std::string_view game, uint64_t title_id);
++void StopSession();
++void RealFrame();
++void Sample(Metric metric, double ms);
++void Count(Counter counter);
++void Rejected(Drop reason);
++void GpuUnavailable(std::string_view reason);
++Decision Admit(bool queue_ready);
++bool ReducedQuality();
++void Presented(bool synthetic);
++std::string Diagnostics(bool detailed = false);
++
++// Thread CPU time measures guest execution, excluding descheduling and UI work.
++// Per-core aggregates are sampled at host real-frame boundaries, not exact guest-frame costs.
++class GuestCpuScope {
++public:
++    explicit GuestCpuScope(size_t core);
++    ~GuestCpuScope();
++private:
++    size_t core;
++    int64_t start{};
++};
++class Scope {
++public:
++    explicit Scope(Metric metric) : metric{metric}, enabled{Enabled()} {
++        if (enabled) start = std::chrono::steady_clock::now();
++    }
++    ~Scope() {
++        Stop();
++    }
++    void Stop() {
++        if (enabled) Sample(metric, std::chrono::duration<double, std::milli>(
++            std::chrono::steady_clock::now() - start).count());
++        enabled = false;
++    }
++private:
++    Metric metric;
++    bool enabled;
++    std::chrono::steady_clock::time_point start{};
++};
++} // namespace Common::Android::X7Pro
+diff --git a/src/core/hle/kernel/physical_core.cpp b/src/core/hle/kernel/physical_core.cpp
+index c5236c6..5c1073a 100644
+--- a/src/core/hle/kernel/physical_core.cpp
++++ b/src/core/hle/kernel/physical_core.cpp
+@@ -12,6 +12,9 @@
+ #include "core/hle/kernel/k_thread.h"
+ #include "core/hle/kernel/kernel.h"
+ #include "core/hle/kernel/physical_core.h"
++#if defined(__ANDROID__)
++#include "common/android/x7pro_telemetry.h"
++#endif
+ #include "core/hle/kernel/svc.h"
+ 
+ namespace Kernel {
+@@ -99,6 +102,9 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
+                     thread->SetStepState(StepState::StepPerformed);
+                 }
+             } else {
++#if defined(__ANDROID__)
++                Common::Android::X7Pro::GuestCpuScope timing(kernel.CurrentPhysicalCoreIndex());
++#endif
+                 hr = interface->RunThread(thread);
+             }
+ 
+diff --git a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp
+index 1af42be..23e4c21 100644
+--- a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp
++++ b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.cpp
+@@ -8,6 +8,7 @@
+ #include "video_core/renderer_vulkan/present/mali_native_frame_gen.h"
+ 
+ #include "common/android/poco_x7pro_profile.h"
++#include "common/android/x7pro_telemetry.h"
+ #include "common/div_ceil.h"
+ #include "common/logging.h"
+ #include "common/settings.h"
+@@ -90,7 +91,7 @@ MaliNativeFrameGen::~MaliNativeFrameGen() = default;
+ 
+ size_t MaliNativeFrameGen::WantedGenerations(size_t capacity) {
+     wanted_generations = !unavailable && Settings::values.mali_native_frame_gen.GetValue() &&
+-                                  history_count > 0 && capacity > 0
++                                  capacity > 0
+                               ? 1
+                               : 0;
+     return wanted_generations;
+@@ -196,7 +197,7 @@ void MaliNativeFrameGen::Reset() {
+ 
+ void MaliNativeFrameGen::Rebuild(const Device& device, VkExtent2D new_extent) {
+     // Reconfiguration happens only on a size/format change, never on the per-frame path.
+-    scheduler.Finish();
++    if (history[0].image) scheduler.Finish();
+     Reset();
+ 
+     extent = new_extent;
+@@ -363,6 +364,10 @@ void MaliNativeFrameGen::UpdateInterpolationDescriptors(const Device& device, Vk
+ void MaliNativeFrameGen::Process(const Device& device, Frame* frame, VkFormat frame_format,
+                                  VkExtent2D) {
+     generated_frames = 0;
++    if (wanted_generations == 0) {
++        Skip(); // Crucially before EnsureReady, history transfers and optical flow.
++        return;
++    }
+     if (!Settings::values.mali_native_frame_gen.GetValue()) {
+         Common::Android::UpdatePocoX7ProFrameGenStatus("off", frame_count, generated_frame_total);
+         return;
+@@ -384,24 +389,33 @@ void MaliNativeFrameGen::Process(const Device& device, Frame* frame, VkFormat fr
+         return;
+     }
+     generated_frames = 1;
+-    ++generated_frame_total;
+ }
+ 
+-void MaliNativeFrameGen::GenerateInto(const Device& device, Frame* destination, size_t generation) {
++void MaliNativeFrameGen::Skip() {
++    // Interpolate only adjacent admitted sources, never two images separated by skipped frames.
++    history_count = 0;
++    generated_frames = 0;
++    wanted_generations = 0;
++    Common::Android::UpdatePocoX7ProFrameGenStatus(
++        Settings::values.mali_native_frame_gen.GetValue() ? "governor-skipped" : "off", frame_count, 0);
++}
++
++bool MaliNativeFrameGen::GenerateInto(const Device& device, Frame* destination, size_t generation) {
+     if (generated_frames == 0 || generation != 0 || !destination->storage_view) {
+-        return;
++        return false;
+     }
+     if (destination->index >= MAX_IN_FLIGHT_SETS) {
+         Disable("generated-frame-index-out-of-range");
+-        return;
++        return false;
+     }
+-    const size_t set_slot = static_cast<size_t>(frame_count % MAX_IN_FLIGHT_SETS);
++    const size_t set_slot = destination->index; // Destination fence protects BOTH descriptor sets.
+     const VkDescriptorSet motion_set = descriptor_sets[set_slot];
+     const VkDescriptorSet interpolation_set = descriptor_sets[MAX_IN_FLIGHT_SETS + destination->index];
+     UpdateMotionDescriptors(device, motion_set);
+     UpdateInterpolationDescriptors(device, interpolation_set, *destination->storage_view);
+ 
+-    const QualityConfig quality = SelectQuality();
++    QualityConfig quality = SelectQuality();
++    if (Common::Android::X7Pro::ReducedQuality()) quality.search_radius = 1;
+     const MotionConstants motion_constants{.frame_width = extent.width,
+                                             .frame_height = extent.height,
+                                             .motion_width = motion_extent.width,
+@@ -423,20 +437,22 @@ void MaliNativeFrameGen::GenerateInto(const Device& device, Frame* destination,
+         .reserved_float = 0.0f,
+     };
+     const VkImage target = *destination->image;
++    const VkImageLayout motion_old_layout = motion.layout;
++    const VkImageLayout confidence_old_layout = confidence.layout;
+     scheduler.RequestOutsideRenderPassOperationContext();
+     scheduler.Record([this, motion_set, interpolation_set, target, motion_constants,
+-                      interpolation_constants](vk::CommandBuffer cmdbuf) {
++                      interpolation_constants, motion_old_layout, confidence_old_layout](vk::CommandBuffer cmdbuf) {
+         const std::array before_motion{
+             MakeBarrier(*motion.image,
+-                        motion.layout == VK_IMAGE_LAYOUT_UNDEFINED
++                        motion_old_layout == VK_IMAGE_LAYOUT_UNDEFINED
+                             ? 0
+                             : VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+-                        VK_ACCESS_SHADER_WRITE_BIT, motion.layout),
++                        VK_ACCESS_SHADER_WRITE_BIT, motion_old_layout),
+             MakeBarrier(*confidence.image,
+-                        confidence.layout == VK_IMAGE_LAYOUT_UNDEFINED
++                        confidence_old_layout == VK_IMAGE_LAYOUT_UNDEFINED
+                             ? 0
+                             : VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+-                        VK_ACCESS_SHADER_WRITE_BIT, confidence.layout),
++                        VK_ACCESS_SHADER_WRITE_BIT, confidence_old_layout),
+         };
+         cmdbuf.PipelineBarrier(vk::PIPELINE_STAGE_GRAPHICS_COMPUTE,
+                                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, {}, {}, before_motion);
+@@ -477,6 +493,7 @@ void MaliNativeFrameGen::GenerateInto(const Device& device, Frame* destination,
+     });
+     motion.layout = VK_IMAGE_LAYOUT_GENERAL;
+     confidence.layout = VK_IMAGE_LAYOUT_GENERAL;
++    ++generated_frame_total; // Recorded only; authoritative completion lives in the fence accounting.
+     if (!reported_active || (Settings::values.mali_native_frame_gen_debug_overlay.GetValue() &&
+                              frame_count % 120 == 0)) {
+         LOG_INFO(Render_Vulkan,
+@@ -486,6 +503,7 @@ void MaliNativeFrameGen::GenerateInto(const Device& device, Frame* destination,
+         reported_active = true;
+     }
+     Common::Android::UpdatePocoX7ProFrameGenStatus("active", frame_count, generated_frame_total);
++    return true;
+ }
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
+index 1321699..4703a7a 100644
+--- a/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
++++ b/src/video_core/renderer_vulkan/present/mali_native_frame_gen.h
+@@ -27,7 +27,8 @@ public:
+     void Process(const Device& device, Frame* frame, VkFormat format, VkExtent2D guest_extent);
+     [[nodiscard]] size_t WantedGenerations(size_t capacity);
+     [[nodiscard]] size_t GeneratedFrameCount() const;
+-    void GenerateInto(const Device& device, Frame* destination, size_t generation);
++    bool GenerateInto(const Device& device, Frame* destination, size_t generation);
++    void Skip();
+ 
+ private:
+     struct Image {
+diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+index 6b2c022..2510ffa 100644
+--- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
++++ b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
+@@ -17,6 +17,7 @@
+ #include "common/logging.h"
+ #ifdef HAS_MALI_X7PRO_FG
+ #include "common/android/poco_x7pro_profile.h"
++#include "common/android/x7pro_telemetry.h"
+ #endif
+ #include <ranges>
+ #include "common/scope_exit.h"
+@@ -222,6 +223,9 @@ RendererVulkan::~RendererVulkan() {
+ }
+ 
+ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebuffers) {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope composite_timing(Common::Android::X7Pro::Metric::Composite);
++#endif
+     SCOPE_EXIT {
+         render_window.OnFrameDisplayed();
+     };
+@@ -240,15 +244,44 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+                                render_window.GetFramebufferLayout(), swapchain.GetImageCount(),
+                                swapchain.GetImageViewFormat());
+ 
+-#if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
+ #ifdef HAS_MALI_X7PRO_FG
+-    Common::Android::RecordPocoX7ProRealFrame();
+-    const size_t frame_gen_capacity = Common::Android::ShouldGeneratePocoX7ProFrame()
+-                                          ? present_manager.MaxExtraFrames()
+-                                          : 0;
+-#else
++    namespace T = Common::Android::X7Pro;
++    T::RealFrame();
++    Frame* generated = Settings::values.mali_native_frame_gen.GetValue() &&
++        Common::Android::IsPocoX7ProProfileActive() ? present_manager.TryGetSyntheticFrame() : nullptr;
++    const auto decision = T::Admit(generated != nullptr);
++    if (decision.admit && generated) {
++        // Submit real rendering first. The history/compute batch is separately timed; the
++        // chronological presentation order remains previous A, interpolated A/B, current B.
++        scheduler.Flush(*frame->render_ready, {}, true);
++        {
++            T::Scope fg_cpu(T::Metric::FgCpu);
++            void(frame_gen.WantedGenerations(1));
++            frame_gen.Process(device, frame, swapchain.GetImageFormat(), GuestExtent(framebuffers));
++            const bool deadline_ok = std::chrono::steady_clock::now() < generated->synthetic_deadline;
++            bool recorded = false;
++            if (deadline_ok && frame_gen.GeneratedFrameCount()) {
++                blit_swapchain.PrepareFrame(device, generated, render_window.GetFramebufferLayout());
++                recorded = frame_gen.GenerateInto(device, generated, 0);
++            }
++            if (recorded) {
++                present_manager.ActivateSyntheticFrame(generated);
++                scheduler.Flush(*generated->render_ready, {}, false, true, true);
++                present_manager.Present(generated);
++            } else {
++                // Warmup history may have been copied, but no interpolation was submitted.
++                T::Rejected(deadline_ok ? T::Drop::Source : T::Drop::RealDeadline);
++                scheduler.Flush({}, {}, false, true);
++                present_manager.ReleaseUnusedSyntheticFrame(generated);
++            }
++        }
++    } else {
++        if (generated) present_manager.ReleaseUnusedSyntheticFrame(generated);
++        frame_gen.Skip();
++        scheduler.Flush(*frame->render_ready, {}, true);
++    }
++#elif defined(HAS_LSFG)
+     const size_t frame_gen_capacity = present_manager.MaxExtraFrames();
+-#endif
+     void(frame_gen.WantedGenerations(frame_gen_capacity));
+ 
+     frame_gen.Process(device, frame, swapchain.GetImageFormat(), GuestExtent(framebuffers));
+@@ -261,9 +294,10 @@ void RendererVulkan::Composite(std::span<const Tegra::FramebufferConfig> framebu
+         scheduler.Flush(*generated->render_ready);
+         present_manager.Present(generated);
+     }
+-#endif
+-
+     scheduler.Flush(*frame->render_ready);
++#else
++    scheduler.Flush(*frame->render_ready);
++#endif
+ 
+     present_manager.Present(frame);
+ #if defined(HAS_LSFG) || defined(HAS_MALI_X7PRO_FG)
+@@ -280,6 +314,9 @@ void RendererVulkan::Report() const {
+     const std::string model_name{device.GetModelName()};
+     const std::string driver_version = GetDriverVersion(device);
+     const std::string driver_name = fmt::format("{} {}", vendor_name, driver_version);
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::SetDevice(model_name, driver_name);
++#endif
+ 
+     const std::string api_version = GetReadableVersion(device.ApiVersion());
+ 
+diff --git a/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp b/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp
+index 29356cf..1ec206f 100644
+--- a/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp
++++ b/src/video_core/renderer_vulkan/vk_compute_pipeline.cpp
+@@ -14,6 +14,9 @@
+ #include "video_core/renderer_vulkan/pipeline_statistics.h"
+ #include "video_core/renderer_vulkan/vk_buffer_cache.h"
+ #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/x7pro_telemetry.h"
++#endif
+ #include "video_core/renderer_vulkan/vk_descriptor_pool.h"
+ #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+@@ -80,6 +83,9 @@ ComputePipeline::ComputePipeline(const Device& device_, Scheduler& scheduler, vk
+     }
+ 
+     auto func{[this, shader_notify, pipeline_statistics] {
++#ifdef HAS_MALI_X7PRO_FG
++        Common::Android::X7Pro::Scope pipeline_timing(Common::Android::X7Pro::Metric::Pipeline);
++#endif
+         const VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT subgroup_size_ci{
+             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT,
+             .pNext = nullptr,
+@@ -125,6 +131,9 @@ ComputePipeline::ComputePipeline(const Device& device_, Scheduler& scheduler, vk
+         }
+ 
+         // Log compute pipeline creation
++#ifdef HAS_MALI_X7PRO_FG
++        pipeline_timing.Stop();
++#endif
+         if (GPU::Logging::IsActive()) {
+             GPU::Logging::GPULogger::GetInstance().LogPipelineStateChange(
+                 "ComputePipeline created"
+diff --git a/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp b/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
+index 8b5b0bc..4f81b26 100644
+--- a/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
++++ b/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp
+@@ -20,6 +20,9 @@
+ #include "video_core/renderer_vulkan/pipeline_statistics.h"
+ #include "video_core/renderer_vulkan/vk_buffer_cache.h"
+ #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/x7pro_telemetry.h"
++#endif
+ #include "video_core/renderer_vulkan/vk_render_pass_cache.h"
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+ #include "video_core/renderer_vulkan/vk_texture_cache.h"
+@@ -681,6 +684,9 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
+ }
+ 
+ void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope pipeline_timing(Common::Android::X7Pro::Metric::Pipeline);
++#endif
+     FixedPipelineState::DynamicState dynamic{};
+     if (!key.state.extended_dynamic_state) {
+         dynamic = key.state.dynamic_state;
+diff --git a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
+index 642b9fa..2a45f0f 100644
+--- a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
++++ b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
+@@ -34,6 +34,9 @@
+ #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
+ #include "video_core/renderer_vulkan/vk_descriptor_pool.h"
+ #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/x7pro_telemetry.h"
++#endif
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+ #include "video_core/renderer_vulkan/vk_shader_util.h"
+ #include "video_core/renderer_vulkan/vk_update_descriptor.h"
+@@ -789,6 +792,9 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
+     ShaderPools& pools, const GraphicsPipelineCacheKey& key,
+     std::span<Shader::Environment* const> envs, PipelineStatistics* statistics,
+     bool build_in_parallel) try {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope shader_timing(Common::Android::X7Pro::Metric::Shader);
++#endif
+     auto hash = key.Hash();
+     LOG_DEBUG(Render_Vulkan, "{:#016x}", hash);
+     size_t env_index{0};
+@@ -883,6 +889,9 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
+         previous_stage = &program;
+     }
+     Common::ThreadWorker* const thread_worker{build_in_parallel ? &workers : nullptr};
++#ifdef HAS_MALI_X7PRO_FG
++    shader_timing.Stop(); // Exclude pipeline creation, even when built synchronously.
++#endif
+     return std::make_unique<GraphicsPipeline>(
+         scheduler, buffer_cache, texture_cache, vulkan_pipeline_cache, &shader_notify, device,
+         descriptor_pool, guest_descriptor_queue, descriptor_buffer_ring, thread_worker, statistics,
+@@ -953,6 +962,9 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
+ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
+     ShaderPools& pools, const ComputePipelineCacheKey& key, Shader::Environment& env,
+     PipelineStatistics* statistics, bool build_in_parallel) try {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope shader_timing(Common::Android::X7Pro::Metric::Shader);
++#endif
+     auto hash = key.Hash();
+     if (device.HasBrokenCompute()) {
+         LOG_ERROR(Render_Vulkan, "Skipping {:#016x}", hash);
+@@ -1007,6 +1019,9 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
+         spv_module.SetObjectNameEXT(name.c_str());
+     }
+     Common::ThreadWorker* const thread_worker{build_in_parallel ? &workers : nullptr};
++#ifdef HAS_MALI_X7PRO_FG
++    shader_timing.Stop();
++#endif
+     return std::make_unique<ComputePipeline>(device, scheduler, vulkan_pipeline_cache, descriptor_pool,
+                                              guest_descriptor_queue, descriptor_buffer_ring,
+                                              thread_worker, statistics,
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.cpp b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+index 56cfa50..4c0f8a5 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.cpp
++++ b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+@@ -14,6 +14,9 @@
+ #include "video_core/renderer_vulkan/present/lsfg_common.h"
+ #endif
+ #include "video_core/renderer_vulkan/vk_present_manager.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "common/android/x7pro_telemetry.h"
++#endif
+ #include "video_core/renderer_vulkan/vk_scheduler.h"
+ #include "video_core/renderer_vulkan/vk_swapchain.h"
+ #include "video_core/vulkan_common/vulkan_device.h"
+@@ -181,6 +184,9 @@ PresentManager::PresentManager(const vk::Instance& instance_,
+ PresentManager::~PresentManager() = default;
+ 
+ Frame* PresentManager::GetRenderFrame() {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope timing(Common::Android::X7Pro::Metric::FrameWait);
++#endif
+ 
+     // Wait for free presentation frames
+     std::unique_lock lock{free_mutex};
+@@ -192,12 +198,74 @@ Frame* PresentManager::GetRenderFrame() {
+ 
+     // Wait for the presentation to be finished so all frame resources are free
+     frame->present_done.Wait();
++#ifdef HAS_MALI_X7PRO_FG
++    ObserveGenerationCompletion(frame);
++    frame->synthetic = false;
++#endif
+     frame->present_done.Reset();
+ 
+     return frame;
+ }
+ 
++#ifdef HAS_MALI_X7PRO_FG
++void PresentManager::ObserveGenerationCompletion(Frame* frame) {
++    if (!frame->awaiting_generation_completion) return;
++    frame->awaiting_generation_completion = false;
++    --synthetic_in_flight;
++    Common::Android::X7Pro::Count(Common::Android::X7Pro::Counter::Generated);
++}
++
++Frame* PresentManager::TryGetSyntheticFrame() {
++    std::unique_lock lock{free_mutex, std::try_to_lock};
++    if (!lock.owns_lock()) return nullptr;
++    // Nonblocking status queries, including completed synthetic frames not selected by real work.
++    for (auto* frame : free_queue) {
++        if (frame->awaiting_generation_completion && frame->present_done.GetStatus() == VK_SUCCESS)
++            ObserveGenerationCompletion(frame);
++    }
++    if (synthetic_in_flight || free_queue.size() < 2) return nullptr;
++    for (auto it = free_queue.begin(); it != free_queue.end(); ++it) {
++        Frame* frame = *it;
++        if (frame->present_done.GetStatus() != VK_SUCCESS) continue;
++        free_queue.erase(it);
++        frame->synthetic = true;
++        frame->synthetic_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(16);
++        return frame;
++    }
++    return nullptr;
++}
++
++void PresentManager::ReleaseUnusedSyntheticFrame(Frame* frame) {
++    std::scoped_lock lock{free_mutex};
++    frame->synthetic = false;
++    free_queue.push_front(frame); // Fence was never reset and render_ready was never signalled.
++    free_cv.notify_one();
++}
++
++void PresentManager::ActivateSyntheticFrame(Frame* frame) {
++    std::scoped_lock lock{free_mutex};
++    frame->present_done.Reset();
++    frame->awaiting_generation_completion = true;
++    ++synthetic_in_flight;
++}
++
++void PresentManager::DrainSyntheticFrame(Frame* frame) {
++    // Consume the already-submitted binary semaphore and signal the recycle fence. Never recycle
++    // a signalled render_ready semaphore or destroy an in-flight compute destination.
++    const VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
++    const VkSemaphore semaphore = *frame->render_ready;
++    const VkSubmitInfo submit{
++        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .waitSemaphoreCount = 1,
++        .pWaitSemaphores = &semaphore, .pWaitDstStageMask = &stage};
++    std::scoped_lock lock{scheduler.submit_mutex};
++    vk::Check(device.GetGraphicsQueue().Submit(submit, *frame->present_done));
++}
++#endif
++
+ void PresentManager::Present(Frame* frame) {
++#ifdef HAS_MALI_X7PRO_FG
++    frame->queued_at = std::chrono::steady_clock::now();
++#endif
+     if (use_present_thread) {
+         scheduler.Record([this, frame](vk::CommandBuffer) {
+             std::unique_lock lock{queue_mutex};
+@@ -207,6 +275,7 @@ void PresentManager::Present(Frame* frame) {
+     } else {
+         scheduler.WaitWorker();
+         CopyToSwapchain(frame);
++        std::scoped_lock lock{free_mutex};
+         free_queue.push_back(frame);
+     }
+ }
+@@ -389,6 +458,16 @@ void PresentManager::SetImageCount() {
+ }
+ 
+ void PresentManager::CopyToSwapchain(Frame* frame) {
++#ifdef HAS_MALI_X7PRO_FG
++    namespace T = Common::Android::X7Pro;
++    T::Sample(T::Metric::QueueAge, std::chrono::duration<double, std::milli>(
++        std::chrono::steady_clock::now() - frame->queued_at).count());
++    if (frame->synthetic && std::chrono::steady_clock::now() > frame->synthetic_deadline) {
++        T::Rejected(T::Drop::PresentDeadline);
++        DrainSyntheticFrame(frame);
++        return;
++    }
++#endif
+     bool requires_recreation = false;
+ 
+     while (true) {
+@@ -572,7 +651,11 @@ void PresentManager::CopyToSwapchainImpl(Frame* frame) {
+     }
+ 
+     // Present
+-    swapchain.Present(render_semaphore);
++    const bool accepted = swapchain.Present(render_semaphore);
++#ifdef HAS_MALI_X7PRO_FG
++    if (accepted) Common::Android::X7Pro::Presented(frame->synthetic);
++    else if (frame->synthetic) Common::Android::X7Pro::Rejected(Common::Android::X7Pro::Drop::Other);
++#endif
+ }
+ 
+ } // namespace Vulkan
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.h b/src/video_core/renderer_vulkan/vk_present_manager.h
+index 577a820..bc7afe4 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.h
++++ b/src/video_core/renderer_vulkan/vk_present_manager.h
+@@ -7,6 +7,7 @@
+ #pragma once
+ 
+ #include <condition_variable>
++#include <chrono>
+ #include <mutex>
+ #include <boost/container/deque.hpp>
+ 
+@@ -36,6 +37,11 @@ struct Frame {
+     vk::CommandBuffer cmdbuf;
+     vk::Semaphore render_ready;
+     vk::Fence present_done;
++#ifdef HAS_MALI_X7PRO_FG
++    bool synthetic{};
++    bool awaiting_generation_completion{};
++    std::chrono::steady_clock::time_point queued_at{}, synthetic_deadline{};
++#endif
+ };
+ 
+ class PresentManager {
+@@ -51,6 +57,12 @@ public:
+ 
+     /// Returns the last used presentation frame
+     Frame* GetRenderFrame();
++#ifdef HAS_MALI_X7PRO_FG
++    // Reserve without waiting or resetting the signalled fence. Retain one free frame for real work.
++    Frame* TryGetSyntheticFrame();
++    void ReleaseUnusedSyntheticFrame(Frame* frame);
++    void ActivateSyntheticFrame(Frame* frame);
++#endif
+ 
+     /// Pushes a frame for presentation
+     void Present(Frame* frame);
+@@ -75,6 +87,11 @@ private:
+     void RecreateSwapchain(Frame* frame);
+ 
+     void SetImageCount();
++#ifdef HAS_MALI_X7PRO_FG
++    void ObserveGenerationCompletion(Frame* frame);
++    void DrainSyntheticFrame(Frame* frame);
++    size_t synthetic_in_flight{}; // protected by free_mutex
++#endif
+ 
+ private:
+     const vk::Instance& instance;
+diff --git a/src/video_core/renderer_vulkan/vk_scheduler.cpp b/src/video_core/renderer_vulkan/vk_scheduler.cpp
+index 4a7a7d5..2c1b069 100644
+--- a/src/video_core/renderer_vulkan/vk_scheduler.cpp
++++ b/src/video_core/renderer_vulkan/vk_scheduler.cpp
+@@ -12,6 +12,9 @@
+ #include <fmt/format.h>
+ 
+ #include "video_core/renderer_vulkan/vk_query_cache.h"
++#ifdef HAS_MALI_X7PRO_FG
++#include "video_core/renderer_vulkan/x7pro_gpu_timing.h"
++#endif
+ 
+ #include "common/settings.h"
+ #include "common/thread.h"
+@@ -47,6 +50,9 @@ Scheduler::Scheduler(const Device& device_, StateTracker& state_tracker_)
+       master_semaphore{std::make_unique<MasterSemaphore>(device)},
+       command_pool{std::make_unique<CommandPool>(*master_semaphore, device)} {
+ 
++#ifdef HAS_MALI_X7PRO_FG
++    x7pro_timing = std::make_unique<X7ProGpuTiming>(device);
++#endif
+     AcquireNewChunk();
+     AllocateWorkerCommandBuffer();
+     worker_thread = std::jthread([this](std::stop_token token) { WorkerThread(token); });
+@@ -54,9 +60,11 @@ Scheduler::Scheduler(const Device& device_, StateTracker& state_tracker_)
+ 
+ Scheduler::~Scheduler() = default;
+ 
+-u64 Scheduler::Flush(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore) {
++u64 Scheduler::Flush(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore,
++                     bool real_frame_end, bool frame_generation, bool synthetic) {
+     // When flushing, we only send data to the worker thread; no waiting is necessary.
+-    const u64 signal_value = SubmitExecution(signal_semaphore, wait_semaphore);
++    const u64 signal_value = SubmitExecution(signal_semaphore, wait_semaphore, real_frame_end,
++                                            frame_generation, synthetic);
+     AllocateNewContext();
+     return signal_value;
+ }
+@@ -330,6 +338,9 @@ void Scheduler::AllocateWorkerCommandBuffer() {
+         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+         .pInheritanceInfo = nullptr,
+     });
++#ifdef HAS_MALI_X7PRO_FG
++    x7pro_timing->Begin(current_cmdbuf, *master_semaphore);
++#endif
+     current_upload_cmdbuf = vk::CommandBuffer(command_pool->Commit(), device.GetDispatchLoader());
+     current_upload_cmdbuf.Begin({
+         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+@@ -339,12 +350,14 @@ void Scheduler::AllocateWorkerCommandBuffer() {
+     });
+ }
+ 
+-u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore) {
++u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore,
++                               bool real_frame_end, bool frame_generation, bool synthetic) {
+     EndPendingOperations();
+     InvalidateState();
+ 
+     const u64 signal_value = master_semaphore->NextTick();
+-    RecordWithUploadBuffer([signal_semaphore, wait_semaphore, signal_value,
++    RecordWithUploadBuffer([signal_semaphore, wait_semaphore, signal_value, real_frame_end,
++                            frame_generation, synthetic,
+                             this](vk::CommandBuffer cmdbuf, vk::CommandBuffer upload_cmdbuf) {
+         static constexpr VkMemoryBarrier WRITE_BARRIER{
+             .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+@@ -354,6 +367,9 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
+         };
+         upload_cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, WRITE_BARRIER);
+         upload_cmdbuf.End();
++#ifdef HAS_MALI_X7PRO_FG
++        x7pro_timing->End(cmdbuf, signal_value, real_frame_end, frame_generation);
++#endif
+         cmdbuf.End();
+ 
+         if (on_submit) {
+@@ -364,6 +380,9 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
+         switch (const VkResult result = master_semaphore->SubmitQueue(
+                     cmdbuf, upload_cmdbuf, signal_semaphore, wait_semaphore, signal_value)) {
+         case VK_SUCCESS:
++#ifdef HAS_MALI_X7PRO_FG
++            if (synthetic) Common::Android::X7Pro::Count(Common::Android::X7Pro::Counter::Submitted);
++#endif
+             // Log successful queue submission
+             if (GPU::Logging::IsActive() &&
+                 Settings::values.gpu_log_vulkan_calls.GetValue()) {
+diff --git a/src/video_core/renderer_vulkan/vk_scheduler.h b/src/video_core/renderer_vulkan/vk_scheduler.h
+index d4bc8d0..3795abb 100644
+--- a/src/video_core/renderer_vulkan/vk_scheduler.h
++++ b/src/video_core/renderer_vulkan/vk_scheduler.h
+@@ -33,6 +33,9 @@ class Device;
+ class Framebuffer;
+ class GraphicsPipeline;
+ class StateTracker;
++#ifdef HAS_MALI_X7PRO_FG
++class X7ProGpuTiming;
++#endif
+ 
+ struct QueryCacheParams;
+ 
+@@ -44,7 +47,8 @@ public:
+     ~Scheduler();
+ 
+     /// Sends the current execution context to the GPU.
+-    u64 Flush(VkSemaphore signal_semaphore = {}, VkSemaphore wait_semaphore = {});
++    u64 Flush(VkSemaphore signal_semaphore = {}, VkSemaphore wait_semaphore = {},
++              bool real_frame_end = false, bool frame_generation = false, bool synthetic = false);
+ 
+     /// Sends the current execution context to the GPU and waits for it to complete.
+     void Finish(VkSemaphore signal_semaphore = {}, VkSemaphore wait_semaphore = {});
+@@ -285,7 +289,8 @@ private:
+ 
+     void AllocateWorkerCommandBuffer();
+ 
+-    u64 SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore);
++    u64 SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore,
++                        bool real_frame_end = false, bool frame_generation = false, bool synthetic = false);
+ 
+     void AllocateNewContext();
+ 
+@@ -300,6 +305,9 @@ private:
+ 
+     std::unique_ptr<MasterSemaphore> master_semaphore;
+     std::unique_ptr<CommandPool> command_pool;
++#ifdef HAS_MALI_X7PRO_FG
++    std::unique_ptr<X7ProGpuTiming> x7pro_timing;
++#endif
+ 
+     VideoCommon::QueryCacheBase<QueryCacheParams>* query_cache = nullptr;
+ 
+diff --git a/src/video_core/renderer_vulkan/vk_swapchain.cpp b/src/video_core/renderer_vulkan/vk_swapchain.cpp
+index fea5398..3481033 100644
+--- a/src/video_core/renderer_vulkan/vk_swapchain.cpp
++++ b/src/video_core/renderer_vulkan/vk_swapchain.cpp
+@@ -11,6 +11,7 @@
+ 
+ #ifdef __ANDROID__
+ #include <android/api-level.h>
++#include "common/android/x7pro_telemetry.h"
+ #endif
+ 
+ #include "common/logging.h"
+@@ -159,6 +160,9 @@ void Swapchain::Create(
+ }
+ 
+ bool Swapchain::AcquireNextImage() {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope timing(Common::Android::X7Pro::Metric::Acquire);
++#endif
+     const VkResult result = device.GetLogical().AcquireNextImageKHR(
+         *swapchain, (std::numeric_limits<u64>::max)(), *present_semaphores[frame_index],
+         VK_NULL_HANDLE, &image_index);
+@@ -214,7 +218,10 @@ bool Swapchain::AcquireNextImage() {
+     return is_suboptimal || is_outdated;
+ }
+ 
+-void Swapchain::Present(VkSemaphore render_semaphore) {
++bool Swapchain::Present(VkSemaphore render_semaphore) {
++#ifdef HAS_MALI_X7PRO_FG
++    Common::Android::X7Pro::Scope timing(Common::Android::X7Pro::Metric::PresentCall);
++#endif
+     const auto present_queue{device.GetPresentQueue()};
+     const VkPresentInfoKHR present_info{
+         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+@@ -227,7 +234,8 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+         .pResults = nullptr,
+     };
+     std::scoped_lock lock{scheduler.submit_mutex};
+-    switch (const VkResult result = present_queue.Present(present_info)) {
++    const VkResult result = present_queue.Present(present_info);
++    switch (result) {
+     case VK_SUCCESS:
+         break;
+     case VK_SUBOPTIMAL_KHR:
+@@ -247,6 +255,7 @@ void Swapchain::Present(VkSemaphore render_semaphore) {
+     if (frame_index >= image_count) {
+         frame_index = 0;
+     }
++    return result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
+ }
+ 
+ void Swapchain::CreateSwapchain(const VkSurfaceCapabilitiesKHR& capabilities) {
+diff --git a/src/video_core/renderer_vulkan/vk_swapchain.h b/src/video_core/renderer_vulkan/vk_swapchain.h
+index d926cc1..30fdf3b 100644
+--- a/src/video_core/renderer_vulkan/vk_swapchain.h
++++ b/src/video_core/renderer_vulkan/vk_swapchain.h
+@@ -40,7 +40,7 @@ public:
+     bool AcquireNextImage();
+ 
+     /// Presents the rendered image to the swapchain.
+-    void Present(VkSemaphore render_semaphore);
++    bool Present(VkSemaphore render_semaphore);
+ 
+     /// Returns true when the swapchain needs to be recreated.
+     bool NeedsRecreation() const {
+diff --git a/src/video_core/renderer_vulkan/x7pro_gpu_timing.h b/src/video_core/renderer_vulkan/x7pro_gpu_timing.h
+new file mode 100644
+index 0000000..d21d0f7
+--- /dev/null
++++ b/src/video_core/renderer_vulkan/x7pro_gpu_timing.h
+@@ -0,0 +1,94 @@
++// SPDX-License-Identifier: GPL-3.0-or-later
++#pragma once
++#include <array>
++#include "common/android/x7pro_telemetry.h"
++#include "video_core/vulkan_common/vulkan_device.h"
++
++namespace Vulkan {
++// Owned/accessed only by the scheduler worker. Query slots are never reused until their
++// submission tick has completed AND both availability words have been observed. No WAIT_BIT.
++class X7ProGpuTiming {
++public:
++    explicit X7ProGpuTiming(const Device& device_) : device{device_} {}
++    void Begin(vk::CommandBuffer cmd, MasterSemaphore& master) {
++        namespace T = Common::Android::X7Pro;
++        Poll(master);
++        current = -1;
++        if (!T::Enabled() || failed) return;
++        if (!pool) {
++            const auto props = device.GetPhysical().GetProperties();
++            const auto families = device.GetPhysical().GetQueueFamilyProperties();
++            bits = families.at(device.GetGraphicsFamily()).timestampValidBits;
++            period = props.limits.timestampPeriod;
++            if (!bits || period <= 0) {
++                failed = true; T::GpuUnavailable("graphics queue timestampValidBits=0 or invalid timestampPeriod"); return;
++            }
++            try {
++                pool = device.GetLogical().CreateQueryPool({
++                    .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
++                    .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 2 * SlotCount});
++            } catch (const vk::Exception& error) {
++                failed = true; T::GpuUnavailable(error.what()); return;
++            }
++        }
++        // Poll and retire in submission order. A full ring skips instrumentation, never waits.
++        if (pending == SlotCount) { write_frame_valid = false; T::GpuUnavailable("timestamp ring full; sample skipped"); return; }
++        current = static_cast<int>((head + pending) % SlotCount);
++        cmd.ResetQueryPool(*pool, 2 * current, 2);
++        device.GetDispatchLoader().vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
++                                                      *pool, 2 * current);
++    }
++    void End(vk::CommandBuffer cmd, uint64_t tick, bool real_end, bool fg) {
++        if (current < 0) {
++            if (!fg) write_frame_valid = false;
++            if (real_end) { ++write_frame; write_frame_valid = true; }
++            return;
++        }
++        device.GetDispatchLoader().vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
++                                                      *pool, 2 * current + 1);
++        slots[current] = {tick, write_frame, real_end, fg, write_frame_valid};
++        if (real_end) { ++write_frame; write_frame_valid = true; }
++        ++pending;
++        current = -1;
++    }
++private:
++    void Poll(MasterSemaphore& master) {
++        namespace T = Common::Android::X7Pro;
++        if (failed) return;
++        if (pending) master.Refresh(); // Nonblocking counter/fence refresh, not a wait.
++        while (pending && master.IsFree(slots[head].tick)) {
++            struct Result { uint64_t ticks, available; } values[2]{};
++            const auto result = device.GetLogical().GetQueryResults(*pool, head * 2, 2,
++                sizeof(values), values, sizeof(Result), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
++            if (result != VK_SUCCESS) {
++                if (result == VK_NOT_READY) break;
++                failed = true; T::GpuUnavailable("vkGetQueryPoolResults returned an error"); return;
++            }
++            if (!values[0].available || !values[1].available) break;
++            const double ms = T::TimestampDelta(values[0].ticks, values[1].ticks, bits) * period / 1e6;
++            const auto slot = slots[head];
++            if (slot.fg) T::Sample(T::Metric::FgGpu, ms);
++            else {
++                if (read_frame != slot.frame) { real_ms = 0; read_frame = slot.frame; }
++                real_ms += ms;
++            }
++            if (slot.real_end) {
++                if (slot.valid) T::Sample(T::Metric::GpuReal, real_ms);
++                real_ms = 0;
++            }
++            head = (head + 1) % SlotCount;
++            --pending;
++        }
++    }
++    static constexpr uint32_t SlotCount = 128;
++    struct Slot { uint64_t tick{}, frame{}; bool real_end{}, fg{}, valid{}; };
++    const Device& device;
++    vk::QueryPool pool;
++    std::array<Slot, SlotCount> slots{};
++    uint32_t head{}, pending{}, bits{};
++    int current{-1};
++    double period{}, real_ms{};
++    uint64_t write_frame{1}, read_frame{};
++    bool failed{}, write_frame_valid{true};
++};
++} // namespace Vulkan
+diff --git a/src/video_core/vulkan_common/vulkan_wrapper.cpp b/src/video_core/vulkan_common/vulkan_wrapper.cpp
+index 5044881..a32de4a 100644
+--- a/src/video_core/vulkan_common/vulkan_wrapper.cpp
++++ b/src/video_core/vulkan_common/vulkan_wrapper.cpp
+@@ -118,6 +118,7 @@ void Load(VkDevice device, DeviceDispatch& dld) noexcept {
+     X(vkCmdDrawIndirectByteCountEXT);
+     X(vkCmdEndConditionalRenderingEXT);
+     X(vkCmdEndQuery);
++    X(vkCmdWriteTimestamp);
+     X(vkCmdEndRenderPass);
+     X(vkCmdEndTransformFeedbackEXT);
+     X(vkCmdEndDebugUtilsLabelEXT);
+diff --git a/src/video_core/vulkan_common/vulkan_wrapper.h b/src/video_core/vulkan_common/vulkan_wrapper.h
+index 97d2ba3..be09359 100644
+--- a/src/video_core/vulkan_common/vulkan_wrapper.h
++++ b/src/video_core/vulkan_common/vulkan_wrapper.h
+@@ -235,6 +235,7 @@ struct DeviceDispatch : InstanceDispatch {
+     PFN_vkCmdEndConditionalRenderingEXT vkCmdEndConditionalRenderingEXT{};
+     PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT{};
+     PFN_vkCmdEndQuery vkCmdEndQuery{};
++    PFN_vkCmdWriteTimestamp vkCmdWriteTimestamp{};
+     PFN_vkCmdEndRenderPass vkCmdEndRenderPass{};
+     PFN_vkCmdEndTransformFeedbackEXT vkCmdEndTransformFeedbackEXT{};
+     PFN_vkCmdFillBuffer vkCmdFillBuffer{};

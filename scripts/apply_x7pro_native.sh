@@ -54,6 +54,11 @@ sed -i 's/, 8)/, 8u)/g' "$target_source"
 test -s "$target_source"
 grep -Fq 'MaliNativeFrameGen::GenerateInto' "$target_source"
 
+# Build19 is deliberately applied AFTER the decoded Build18 source asset.
+build19_patch="${repo_dir}/patches/0009-build19-fg-scheduling-telemetry.patch"
+git -C "$eden_dir" apply --check "$build19_patch"
+git -C "$eden_dir" apply "$build19_patch"
+
 printf '%s\n' \
   'Eden Mali X7 Pro: native Vulkan compute frame generation enabled.' \
   'No Lossless.dll, Vulkan memory-model, or VK_EXT_robustness2 requirement is added.' \
