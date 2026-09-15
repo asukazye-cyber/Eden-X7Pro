@@ -3,10 +3,10 @@ diff --git a/src/android/app/src/main/jni/android_settings.h b/src/android/app/s
 +++ b/src/android/app/src/main/jni/android_settings.h
 @@ -150,5 +150,8 @@
 -        Settings::SwitchableSetting<s32> pipeline_worker_count{linkage, 2, "pipeline_worker_count",
-+        // Eden-X7Pro V1: three workers are a balanced first-run preset for
-+        // the Dimensity 8400-Ultra. The Android settings screen still lets
++        // Eden-X7Pro: four workers use the Dimensity 8400-Ultra's wide CPU
++        // cluster without making the setting a renderer requirement. The Android settings screen still lets
 +        // the user choose any supported value from 2 through 8.
-+        Settings::SwitchableSetting<s32> pipeline_worker_count{linkage, 3, "pipeline_worker_count",
++        Settings::SwitchableSetting<s32> pipeline_worker_count{linkage, 4, "pipeline_worker_count",
                                   Settings::Category::Android,
                                   Settings::Specialization::Default,
                                   true,

@@ -24,5 +24,5 @@ git -C "$eden_dir" apply "$patch_file"
 
 printf '%s\n' \
   'Eden-X7Pro V1: applying the Dimensity 8400-Ultra / Mali-G720 baseline.' \
-  'Defaults: 3 pipeline workers, asynchronous GPU emulation and asynchronous shaders.' \
+  'Defaults: 4 pipeline workers, asynchronous GPU emulation and asynchronous shaders.' \
   'All three values remain editable in Android settings.'
