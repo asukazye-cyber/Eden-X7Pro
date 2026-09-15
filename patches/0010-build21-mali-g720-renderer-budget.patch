@@ -1579,7 +1579,7 @@ index 4f81b26ac14c4dcdb01b97c8e9224a49307d8365..742baa65b80d0edfefdbd355ea3c936a
              descriptor_buffer_chunk = alloc.chunk;
              last_descriptor_buffer_offset = alloc.offset;
 diff --git a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
-index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae30a026fa0 100644
+index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..1df0f2c6e6dfd3c599586b3810253162610eb43e 100644
 --- a/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
 +++ b/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp
 @@ -27,6 +27,8 @@
@@ -1591,7 +1591,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
  #include "video_core/renderer_vulkan/fixed_pipeline_state.h"
  #include "video_core/renderer_vulkan/maxwell_to_vk.h"
  #include "video_core/renderer_vulkan/pipeline_helper.h"
-@@ -65,10 +67,36 @@ using VideoCommon::FileEnvironment;
+@@ -65,10 +67,39 @@ using VideoCommon::FileEnvironment;
  using VideoCommon::GenericEnvironment;
  using VideoCommon::GraphicsEnvironment;
  
@@ -1614,14 +1614,17 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
 +
 +VulkanCacheIdentity GetVulkanCacheIdentity(const Device& device) {
 +    const auto policy = static_cast<u32>(Settings::values.mali_renderer_optimization.GetValue());
-+    return {
++    VulkanCacheIdentity identity{
 +        .vendor_id = device.GetVendorID(),
 +        .device_id = device.GetDeviceID(),
 +        .driver_version = device.GetDriverVersion(),
-+        .pipeline_cache_uuid = device.GetPipelineCacheUUID(),
++        .pipeline_cache_uuid = {},
 +        .renderer_config = policy | (device.IsExtDescriptorBufferSupported() ? 1U << 8 : 0U) |
 +                           (device.GetGpuPerformanceProfile().IsActive() ? 1U << 9 : 0U),
 +    };
++    std::copy_n(device.GetPipelineCacheUUID(), identity.pipeline_cache_uuid.size(),
++                identity.pipeline_cache_uuid.begin());
++    return identity;
 +}
 +
 +constexpr size_t VULKAN_CACHE_HEADER_BYTES =
@@ -1629,7 +1632,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
  
  template <typename Container>
  auto MakeSpan(Container& container) {
-@@ -564,6 +592,8 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipeline() {
+@@ -564,6 +595,8 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipeline() {
      if (current_pipeline) {
          GraphicsPipeline* const next{current_pipeline->Next(graphics_key)};
          if (next) {
@@ -1638,7 +1641,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
              current_pipeline = next;
              return BuiltPipeline(current_pipeline);
          }
-@@ -586,9 +616,16 @@ ComputePipeline* PipelineCache::CurrentComputePipeline() {
+@@ -586,9 +619,16 @@ ComputePipeline* PipelineCache::CurrentComputePipeline() {
      const auto [pair, is_new]{compute_cache.try_emplace(key)};
      auto& pipeline{pair->second};
      if (!is_new) {
@@ -1655,7 +1658,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
      return pipeline.get();
  }
  
-@@ -640,6 +677,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
+@@ -640,6 +680,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
              std::scoped_lock lock{state.mutex};
              if (pipeline) {
                  compute_cache.emplace(key, std::move(pipeline));
@@ -1664,7 +1667,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
              }
              ++state.built;
              if (state.has_loaded) {
-@@ -692,6 +731,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
+@@ -692,6 +734,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
              std::scoped_lock lock{state.mutex};
              if (pipeline) {
                  graphics_cache.emplace(key, std::move(pipeline));
@@ -1673,7 +1676,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
              }
              ++state.built;
              if (state.has_loaded) {
-@@ -733,6 +774,14 @@ void PipelineCache::QueueVulkanPipelineCacheFlush() {
+@@ -733,6 +777,14 @@ void PipelineCache::QueueVulkanPipelineCacheFlush() {
      if (++pipelines_since_flush < VULKAN_CACHE_FLUSH_PIPELINES) {
          return;
      }
@@ -1688,7 +1691,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
      const auto now = std::chrono::steady_clock::now();
      const auto megabytes = last_cache_size.load(std::memory_order_relaxed) / (1024 * 1024);
      const std::chrono::seconds interval{
-@@ -759,7 +808,17 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineSlowPath() {
+@@ -759,7 +811,17 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineSlowPath() {
      const auto [pair, is_new]{graphics_cache.try_emplace(graphics_key)};
      auto& pipeline{pair->second};
      if (is_new) {
@@ -1706,7 +1709,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
      }
      if (!pipeline) {
          return nullptr;
-@@ -1043,17 +1102,33 @@ void PipelineCache::SerializeVulkanPipelineCache(const std::filesystem::path& fi
+@@ -1043,17 +1105,33 @@ void PipelineCache::SerializeVulkanPipelineCache(const std::filesystem::path& fi
                    Common::FS::PathToUTF8String(filename));
          return;
      }
@@ -1744,7 +1747,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
  
      LOG_INFO(Render_Vulkan, "Vulkan driver pipelines cached at: {}",
               Common::FS::PathToUTF8String(filename));
-@@ -1088,9 +1163,24 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
+@@ -1088,9 +1166,24 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
  
          std::array<char, 8> magic_number;
          u32 cache_version;
@@ -1771,7 +1774,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
              file.close();
              if (Common::FS::RemoveFile(filename)) {
                  if (magic_number != VULKAN_CACHE_MAGIC_NUMBER) {
-@@ -1099,6 +1189,11 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
+@@ -1099,6 +1192,11 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
                  if (cache_version != expected_cache_version) {
                      LOG_INFO(Common_Filesystem, "Deleting old Vulkan driver pipeline cache");
                  }
@@ -1783,7 +1786,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
              } else {
                  LOG_ERROR(Common_Filesystem,
                            "Invalid Vulkan pipeline cache file and failed to delete it in \"{}\"",
-@@ -1107,8 +1202,17 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
+@@ -1107,8 +1205,17 @@ vk::PipelineCache PipelineCache::LoadVulkanPipelineCache(const std::filesystem::
              return create_pipeline_cache(0, nullptr);
          }
  
@@ -1804,7 +1807,7 @@ index 2a45f0fed030ed54757185cd3afdd21e9c8560e3..b30ed0565b0ce92754bfcf7755399ae3
          file.read(cache_data.data(), cache_size);
  
 diff --git a/src/video_core/renderer_vulkan/vk_present_manager.cpp b/src/video_core/renderer_vulkan/vk_present_manager.cpp
-index 4c0f8a5e6382ac1fa1f761aa7af4e63235e46d29..67730377db35d3ece81b8fe7ca75aa24778fa6d3 100644
+index 4c0f8a5e6382ac1fa1f761aa7af4e63235e46d29..35c8b70bb6e0c79995c432b72ba87e7913fb4adf 100644
 --- a/src/video_core/renderer_vulkan/vk_present_manager.cpp
 +++ b/src/video_core/renderer_vulkan/vk_present_manager.cpp
 @@ -6,6 +6,8 @@
@@ -1839,10 +1842,10 @@ index 4c0f8a5e6382ac1fa1f761aa7af4e63235e46d29..67730377db35d3ece81b8fe7ca75aa24
              .pNext = nullptr,
              .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
 -            .dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
-+            .dstAccessMask = precise_present_barrier
-+                                 ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-+                                       VK_ACCESS_SHADER_WRITE_BIT
-+                                 : VK_ACCESS_MEMORY_WRITE_BIT,
++            .dstAccessMask = static_cast<VkAccessFlags>(
++                precise_present_barrier
++                    ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT
++                    : VK_ACCESS_MEMORY_WRITE_BIT),
              .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
