@@ -1,0 +1,63 @@
+diff --git a/src/android/app/src/main/res/values/strings.xml b/src/android/app/src/main/res/values/strings.xml
+index ca7263e..910955d 100644
+--- a/src/android/app/src/main/res/values/strings.xml
++++ b/src/android/app/src/main/res/values/strings.xml
+@@ -320,6 +320,21 @@
+     <string name="frame_gen">Frame generation</string>
+     <string name="frame_gen_per_game_description">Configure frame generation for this game</string>
+     <string name="frame_gen_description">Insert interpolated frames between rendered ones using Lossless Scaling. Forces FIFO presentation while enabled.</string>
++    <string name="mali_native_frame_gen">Mali Native Frame Generation (Experimental)</string>
++    <string name="mali_native_frame_gen_description">Uses the POCO X7 Pro Vulkan compute path to estimate motion between two GPU-resident frames and generate one midpoint frame. It never requires Lossless.dll, Vulkan memory model, or VK_EXT_robustness2 support.</string>
++    <string name="mali_native_frame_gen_mode">Mode</string>
++    <string name="mali_native_frame_gen_mode_description">Performance uses a smaller motion search; Balanced is the POCO X7 Pro default; Quality spends more GPU time on motion estimation; Adaptive adjusts based on scene complexity.</string>
++    <string name="mali_native_frame_gen_mode_performance">Performance</string>
++    <string name="mali_native_frame_gen_mode_balanced">Balanced</string>
++    <string name="mali_native_frame_gen_mode_quality">Quality</string>
++    <string name="mali_native_frame_gen_mode_adaptive">Adaptive</string>
++    <string name="mali_native_frame_gen_target">Target output rate</string>
++    <string name="mali_native_frame_gen_target_description">The visual target for the experimental pacing policy. The emulator never changes the game\'s actual emulation speed.</string>
++    <string name="mali_native_frame_gen_target_auto">Auto</string>
++    <string name="mali_native_frame_gen_target_40">40 FPS</string>
++    <string name="mali_native_frame_gen_target_60">60 FPS</string>
++    <string name="mali_native_frame_gen_debug_overlay">Mali FG debug overlay</string>
++    <string name="mali_native_frame_gen_debug_overlay_description">Shows profile state plus real/generated frame counters in the performance overlay and emits periodic [MALI-FG] log entries.</string>
+     <string name="frame_gen_multiplier">Frame multiplier</string>
+     <string name="frame_gen_multiplier_description">How many frames to display for each rendered frame. Higher values cost proportionally more GPU time. Asking for more than your display can pre
+ </string>
+diff --git a/src/android/app/src/main/res/values/arrays.xml b/src/android/app/src/main/res/values/arrays.xml
+index 931cf2b..fb5d16c 100644
+--- a/src/android/app/src/main/res/values/arrays.xml
++++ b/src/android/app/src/main/res/values/arrays.xml
+@@ -199,6 +199,32 @@
+         <item>2</item>
+     </integer-array>
+ 
++    <string-array name="maliNativeFrameGenModeNames">
++        <item>@string/mali_native_frame_gen_mode_performance</item>
++        <item>@string/mali_native_frame_gen_mode_balanced</item>
++        <item>@string/mali_native_frame_gen_mode_quality</item>
++        <item>@string/mali_native_frame_gen_mode_adaptive</item>
++    </string-array>
++
++    <integer-array name="maliNativeFrameGenModeValues">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++        <item>3</item>
++    </integer-array>
++
++    <string-array name="maliNativeFrameGenTargetNames">
++        <item>@string/mali_native_frame_gen_target_auto</item>
++        <item>@string/mali_native_frame_gen_target_40</item>
++        <item>@string/mali_native_frame_gen_target_60</item>
++    </string-array>
++
++    <integer-array name="maliNativeFrameGenTargetValues">
++        <item>0</item>
++        <item>40</item>
++        <item>60</item>
++    </integer-array>
++
+     <string-array name="rendererVSyncNames">
+         <item>@string/renderer_vsync_immediate</item>
+         <item>@string/renderer_vsync_mailbox</item>
