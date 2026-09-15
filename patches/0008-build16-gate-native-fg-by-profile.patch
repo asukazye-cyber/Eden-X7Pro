@@ -1,0 +1,14 @@
+diff --git a/src/video_core/renderer_vulkan/vk_present_manager.cpp b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+index 4be3217..56cfa50 100644
+--- a/src/video_core/renderer_vulkan/vk_present_manager.cpp
++++ b/src/video_core/renderer_vulkan/vk_present_manager.cpp
+@@ -37,7 +37,8 @@ bool CanStoreToFrame(const vk::PhysicalDevice& physical_device, VkFormat format)
+         return false;
+     }
+ #elif defined(HAS_MALI_X7PRO_FG)
+-    if (!Settings::values.mali_native_frame_gen.GetValue()) {
++    if (!Settings::values.mali_native_frame_gen.GetValue() ||
++        !Common::Android::IsPocoX7ProProfileActive()) {
+         return false;
+     }
+ #endif

@@ -27,6 +27,18 @@ done
 # The reviewed V1/V2 defaults are independent once the native changes are in place.
 bash "${script_dir}/apply_x7pro_v2.sh" "$eden_dir"
 
+# Build #16 is based on the fully composed V1/V2 tree because V1 changes the neighboring Android
+# renderer defaults. The relaxed whitespace mode only normalizes the legacy CRLF patch assets.
+build16_patch="${repo_dir}/patches/0007-build16-profile-governor-and-ui.patch"
+[[ -f "$build16_patch" ]] || { echo "Missing patch: $build16_patch" >&2; exit 1; }
+git -C "$eden_dir" apply --check --ignore-space-change "$build16_patch"
+git -C "$eden_dir" apply --ignore-space-change "$build16_patch"
+
+profile_gate_patch="${repo_dir}/patches/0008-build16-gate-native-fg-by-profile.patch"
+[[ -f "$profile_gate_patch" ]] || { echo "Missing patch: $profile_gate_patch" >&2; exit 1; }
+git -C "$eden_dir" apply --check --ignore-space-change "$profile_gate_patch"
+git -C "$eden_dir" apply --ignore-space-change "$profile_gate_patch"
+
 # The compute implementation is kept as a compressed, source-only asset to avoid carrying an
 # additional copy of the whole upstream tree. It is decompressed deterministically into the file
 # referenced by 0003 before CMake configures the Android build.

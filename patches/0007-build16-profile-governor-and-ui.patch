@@ -1,0 +1,650 @@
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt
+index 2d9e295..8c3aa0c 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/NativeLibrary.kt
+@@ -220,6 +220,9 @@ object NativeLibrary {
+     /** Human-readable diagnostics for the self-contained Mali compute frame generator. */
+     external fun getMaliNativeFrameGenDiagnostics(): String
+ 
++    /** Measured real-frame diagnostics for the POCO X7 Pro performance overlay. */
++    external fun getPocoX7ProPerformanceDiagnostics(): String
++
+     external fun applySettings()
+ 
+     external fun logSettings()
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt
+index 645d7df..b805a55 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/BooleanSetting.kt
+@@ -43,6 +43,7 @@ enum class BooleanSetting(override val key: String) : AbstractBooleanSetting {
+     RENDERER_FRAME_GEN_DUMP_FLOW("frame_gen_dump_flow"),
+     RENDERER_MALI_NATIVE_FRAME_GEN("mali_native_frame_gen"),
+     RENDERER_MALI_NATIVE_FRAME_GEN_DEBUG_OVERLAY("mali_native_frame_gen_debug_overlay"),
++    X7PRO_DETAILED_PERFORMANCE_OVERLAY("x7pro_detailed_performance_overlay"),
+     GPU_UNSWIZZLE_ENABLED("gpu_unswizzle_enabled"),
+     PICTURE_IN_PICTURE("picture_in_picture"),
+     USE_CUSTOM_RTC("custom_rtc_enabled"),
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
+index f41d2d2..8092bba 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/IntSetting.kt
+@@ -25,6 +25,9 @@ enum class IntSetting(override val key: String) : AbstractIntSetting {
+     RENDERER_FRAME_GEN_FLOW_SCALE("frame_gen_flow_scale"),
+     RENDERER_MALI_NATIVE_FRAME_GEN_MODE("mali_native_frame_gen_mode"),
+     RENDERER_MALI_NATIVE_FRAME_GEN_TARGET("mali_native_frame_gen_target"),
++    X7PRO_HARDWARE_OPTIMIZATION("x7pro_hardware_optimization"),
++    X7PRO_PERFORMANCE_GOVERNOR("x7pro_performance_governor"),
++    X7PRO_FG_GOVERNOR("x7pro_fg_governor"),
+     RENDERER_VSYNC("use_vsync"),
+     RENDERER_SCALING_FILTER("scaling_filter"),
+     RENDERER_ANTI_ALIASING("anti_aliasing"),
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/Settings.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/Settings.kt
+index 23c5ceb..2f9cdb1 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/Settings.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/model/Settings.kt
+@@ -11,6 +11,7 @@ object Settings {
+         SECTION_ROOT(R.string.advanced_settings),
+         SECTION_SYSTEM(R.string.preferences_system),
+         SECTION_RENDERER(R.string.preferences_graphics),
++        SECTION_DEVICE_OPTIMIZATION(R.string.x7pro_device_optimization),
+         SECTION_FRAME_GEN(R.string.frame_gen),
+         SECTION_POST_PROCESSING(R.string.post_processing),
+         SECTION_PERFORMANCE_STATS(R.string.stats_overlay_options),
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
+index 70df848..bbaa215 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/features/settings/ui/SettingsFragmentPresenter.kt
+@@ -214,6 +214,7 @@ class SettingsFragmentPresenter(
+             MenuTag.SECTION_ROOT -> addConfigSettings(sl)
+             MenuTag.SECTION_SYSTEM -> addSystemSettings(sl)
+             MenuTag.SECTION_RENDERER -> addGraphicsSettings(sl)
++            MenuTag.SECTION_DEVICE_OPTIMIZATION -> addDeviceOptimizationSettings(sl)
+             MenuTag.SECTION_FRAME_GEN -> addFrameGenSettings(sl)
+             MenuTag.SECTION_POST_PROCESSING -> addPostProcessingSettings(sl)
+             MenuTag.SECTION_PERFORMANCE_STATS -> addPerformanceOverlaySettings(sl)
+@@ -464,6 +465,16 @@ class SettingsFragmentPresenter(
+                     menuKey = MenuTag.SECTION_RENDERER
+                 )
+             )
++            if (BuildConfig.APPLICATION_ID == "org.eden.mali.x7pro") {
++                add(
++                    SubmenuSetting(
++                        titleId = R.string.x7pro_device_optimization,
++                        descriptionId = R.string.x7pro_device_optimization_description,
++                        iconId = R.drawable.ic_system,
++                        menuKey = MenuTag.SECTION_DEVICE_OPTIMIZATION
++                    )
++                )
++            }
+             if (!NativeConfig.isPerGameConfigLoaded()) {
+                 add(
+                     SubmenuSetting(
+@@ -567,6 +578,47 @@ class SettingsFragmentPresenter(
+     }
+ 
+     // TODO(crueter): sub-submenus?
++    private fun addDeviceOptimizationSettings(sl: ArrayList<SettingsItem>) {
++        if (BuildConfig.APPLICATION_ID != "org.eden.mali.x7pro") return
++        sl.apply {
++            add(HeaderSetting(R.string.x7pro_device_optimization))
++            add(
++                SingleChoiceSetting(
++                    IntSetting.X7PRO_HARDWARE_OPTIMIZATION,
++                    titleId = R.string.x7pro_hardware_optimization,
++                    descriptionId = R.string.x7pro_hardware_optimization_description,
++                    choicesId = R.array.x7proHardwareOptimizationNames,
++                    valuesId = R.array.x7proHardwareOptimizationValues
++                )
++            )
++            add(
++                SingleChoiceSetting(
++                    IntSetting.X7PRO_PERFORMANCE_GOVERNOR,
++                    titleId = R.string.x7pro_performance_governor,
++                    descriptionId = R.string.x7pro_performance_governor_description,
++                    choicesId = R.array.x7proPerformanceGovernorNames,
++                    valuesId = R.array.x7proPerformanceGovernorValues
++                )
++            )
++            add(
++                SwitchSetting(
++                    BooleanSetting.X7PRO_DETAILED_PERFORMANCE_OVERLAY,
++                    titleId = R.string.x7pro_detailed_performance_overlay,
++                    descriptionId = R.string.x7pro_detailed_performance_overlay_description
++                )
++            )
++            add(
++                SingleChoiceSetting(
++                    IntSetting.X7PRO_FG_GOVERNOR,
++                    titleId = R.string.x7pro_fg_governor,
++                    descriptionId = R.string.x7pro_fg_governor_description,
++                    choicesId = R.array.x7proFgGovernorNames,
++                    valuesId = R.array.x7proFgGovernorValues
++                )
++            )
++        }
++    }
++
+     private fun addGraphicsSettings(sl: ArrayList<SettingsItem>) {
+         sl.apply {
+             add(IntSetting.RENDERER_RESOLUTION.key)
+diff --git a/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt b/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt
+index 14b6136..45a6931 100644
+--- a/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt
++++ b/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt
+@@ -1520,7 +1520,10 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
+     private fun updateShowStatsOverlay() {
+         val showMaliDiagnostics = BuildConfig.APPLICATION_ID == "org.eden.mali.x7pro" &&
+             BooleanSetting.RENDERER_MALI_NATIVE_FRAME_GEN_DEBUG_OVERLAY.getBoolean()
+-        val showPerfOverlay = BooleanSetting.SHOW_PERFORMANCE_OVERLAY.getBoolean() || showMaliDiagnostics
++        val showX7ProPerformance = BuildConfig.APPLICATION_ID == "org.eden.mali.x7pro" &&
++            BooleanSetting.X7PRO_DETAILED_PERFORMANCE_OVERLAY.getBoolean()
++        val showPerfOverlay = BooleanSetting.SHOW_PERFORMANCE_OVERLAY.getBoolean() ||
++            showMaliDiagnostics || showX7ProPerformance
+         binding.showStatsOverlayText.apply {
+             setTextColor(
+                 MaterialColors.getColor(
+@@ -1546,7 +1549,9 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
+                     val perfStats = NativeLibrary.getPerfStats()
+                     val actualFps = perfStats[FPS]
+ 
+-                    if (showMaliDiagnostics) {
++                    if (showX7ProPerformance) {
++                        sb.append(NativeLibrary.getPocoX7ProPerformanceDiagnostics())
++                    } else if (showMaliDiagnostics) {
+                         sb.append(NativeLibrary.getMaliNativeFrameGenDiagnostics())
+                     }
+ 
+diff --git a/src/android/app/src/main/jni/emu_window/emu_window.cpp b/src/android/app/src/main/jni/emu_window/emu_window.cpp
+index e4f50f9..aaa49ef 100644
+--- a/src/android/app/src/main/jni/emu_window/emu_window.cpp
++++ b/src/android/app/src/main/jni/emu_window/emu_window.cpp
+@@ -12,7 +12,8 @@
+ #include <cstdint>
+ #include <dlfcn.h>
+ 
+ #include "common/android/id_cache.h"
++#include "common/android/poco_x7pro_profile.h"
+ #include "common/logging.h"
+ #include "common/settings.h"
+ #include "input_common/drivers/android.h"
+@@ -128,7 +128,8 @@ float EmuWindow_Android::GetPresentedFrameMultiplier() {
+ #ifdef HAS_MALI_X7PRO_FG
+     // The native Mali path produces exactly one motion-compensated intermediate per source frame.
+     // Report that to Android's display-rate hint without involving the optional LSFG DLL path.
+-    if (Settings::values.mali_native_frame_gen.GetValue()) {
++    if (Settings::values.mali_native_frame_gen.GetValue() &&
++        Common::Android::IsPocoX7ProProfileActive()) {
+         return 2.0f;
+     }
+ #endif
+@@ -192,7 +193,8 @@ void EmuWindow_Android::UpdateFrameRateHint() {
+ #ifdef HAS_MALI_X7PRO_FG
+     // This is a display pacing request only. It deliberately never changes emulation speed or
+     // fabricates source frames when the renderer has disabled native generation.
+-    if (Settings::values.mali_native_frame_gen.GetValue()) {
++    if (Settings::values.mali_native_frame_gen.GetValue() &&
++        Common::Android::IsPocoX7ProProfileActive()) {
+         const u32 target = Settings::values.mali_native_frame_gen_target.GetValue();
+         if (target != 0) {
+             frame_rate_hint = std::min(frame_rate_hint, static_cast<float>(target));
+diff --git a/src/android/app/src/main/jni/native.cpp b/src/android/app/src/main/jni/native.cpp
+index 1f29516..e1bf0a8 100644
+--- a/src/android/app/src/main/jni/native.cpp
++++ b/src/android/app/src/main/jni/native.cpp
+@@ -1040,6 +1040,15 @@ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getMaliNativeFrameGenDiagnostics(J
+ #endif
+ }
+ 
++jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getPocoX7ProPerformanceDiagnostics(JNIEnv* env,
++                                                                                     jobject) {
++#ifdef HAS_MALI_X7PRO_FG
++    return Common::Android::ToJString(env, Common::Android::PocoX7ProPerformanceDiagnostics());
++#else
++    return Common::Android::ToJString(env, "");
++#endif
++}
++
+ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getCpuSummary(JNIEnv* env, jobject /*jobj*/) {
+     get_arm_cpu_name();
+     constexpr const char* CPUINFO_PATH = "/proc/cpuinfo";
+diff --git a/src/android/app/src/main/res/values-pt-rBR/strings.xml b/src/android/app/src/main/res/values-pt-rBR/strings.xml
+index 335178f..a79121c 100644
+--- a/src/android/app/src/main/res/values-pt-rBR/strings.xml
++++ b/src/android/app/src/main/res/values-pt-rBR/strings.xml
+@@ -1,6 +1,25 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+ 
++    <string name="x7pro_device_optimization">Desempenho / Otimização do dispositivo</string>
++    <string name="x7pro_device_optimization_description">Perfil do POCO X7 Pro, governador de quadros reais e diagnósticos medidos</string>
++    <string name="x7pro_hardware_optimization">Otimização de hardware</string>
++    <string name="x7pro_hardware_optimization_description">Automático reconhece o alvo Dimensity 8400 / Mali-G720. Padrão desativa afinidade e política de FG específicas do alvo.</string>
++    <string name="x7pro_hardware_optimization_auto">Automático</string>
++    <string name="x7pro_hardware_optimization_standard">Padrão</string>
++    <string name="x7pro_hardware_optimization_target">Dimensity 8400 / Mali-G720</string>
++    <string name="x7pro_performance_governor">Governador de desempenho</string>
++    <string name="x7pro_performance_governor_description">Controla o orçamento de quadro real usado pelo governador de FG. Travado em 30 prioriza cada quadro real em 33,333 ms e nunca altera a velocidade do jogo.</string>
++    <string name="x7pro_performance_governor_off">Desligado</string>
++    <string name="x7pro_performance_governor_balanced">Equilibrado</string>
++    <string name="x7pro_performance_governor_locked_30">Travado em 30 FPS</string>
++    <string name="x7pro_detailed_performance_overlay">Sobreposição detalhada de desempenho</string>
++    <string name="x7pro_detailed_performance_overlay_description">Mostra intervalos de renderização medidos e o estado do perfil. Métricas sem instrumentação confiável aparecem como N/D.</string>
++    <string name="x7pro_fg_governor">Governador de geração de quadros</string>
++    <string name="x7pro_fg_governor_description">Automático descarta o quadro sintético antes que ele atrase um quadro real. Requer Geração de quadros nativa Mali ativada.</string>
++    <string name="x7pro_fg_governor_off">Desligado</string>
++    <string name="x7pro_fg_governor_auto">Automático</string>
++
+     <string name="app_disclaimer">Este programa serve para rodar jogos do Nintendo Switch. Nenhum jogo ou chaves do sistema são inclusos<br /><br />Antes de começar, localize o seu <![CDATA[<b> prod.keys </b>]]> salvo no seu sistema.<br /><br /><![CDATA[<a href=\"https://yuzu-mirror.github.io/help/quickstart\">Saiba mais</a>]]></string>
+     <string name="notice_notification_channel_name">Notificações e erros</string>
+     <string name="notice_notification_channel_description">Mostra notificações quando acontecer um erro.</string>
+diff --git a/src/android/app/src/main/res/values/arrays.xml b/src/android/app/src/main/res/values/arrays.xml
+index fb5d16c..22c98c7 100644
+--- a/src/android/app/src/main/res/values/arrays.xml
++++ b/src/android/app/src/main/res/values/arrays.xml
+@@ -225,6 +225,37 @@
+         <item>60</item>
+     </integer-array>
+ 
++    <string-array name="x7proHardwareOptimizationNames">
++        <item>@string/x7pro_hardware_optimization_auto</item>
++        <item>@string/x7pro_hardware_optimization_standard</item>
++        <item>@string/x7pro_hardware_optimization_target</item>
++    </string-array>
++    <integer-array name="x7proHardwareOptimizationValues">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </integer-array>
++
++    <string-array name="x7proPerformanceGovernorNames">
++        <item>@string/x7pro_performance_governor_off</item>
++        <item>@string/x7pro_performance_governor_balanced</item>
++        <item>@string/x7pro_performance_governor_locked_30</item>
++    </string-array>
++    <integer-array name="x7proPerformanceGovernorValues">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </integer-array>
++
++    <string-array name="x7proFgGovernorNames">
++        <item>@string/x7pro_fg_governor_off</item>
++        <item>@string/x7pro_fg_governor_auto</item>
++    </string-array>
++    <integer-array name="x7proFgGovernorValues">
++        <item>0</item>
++        <item>1</item>
++    </integer-array>
++
+     <string-array name="rendererVSyncNames">
+         <item>@string/renderer_vsync_immediate</item>
+         <item>@string/renderer_vsync_mailbox</item>
+diff --git a/src/android/app/src/main/res/values/strings.xml b/src/android/app/src/main/res/values/strings.xml
+index 910955d..232b124 100644
+--- a/src/android/app/src/main/res/values/strings.xml
++++ b/src/android/app/src/main/res/values/strings.xml
+@@ -335,6 +335,24 @@
+     <string name="mali_native_frame_gen_target_60">60 FPS</string>
+     <string name="mali_native_frame_gen_debug_overlay">Mali FG debug overlay</string>
+     <string name="mali_native_frame_gen_debug_overlay_description">Shows profile state plus real/generated frame counters in the performance overlay and emits periodic [MALI-FG] log entries.</string>
++    <string name="x7pro_device_optimization">Performance / Device Optimization</string>
++    <string name="x7pro_device_optimization_description">POCO X7 Pro hardware profile, real-frame governor, and measured diagnostics</string>
++    <string name="x7pro_hardware_optimization">Hardware Optimization</string>
++    <string name="x7pro_hardware_optimization_description">Auto recognizes the Dimensity 8400 / Mali-G720 target. Standard disables the target-specific affinity and FG policy.</string>
++    <string name="x7pro_hardware_optimization_auto">Auto</string>
++    <string name="x7pro_hardware_optimization_standard">Standard</string>
++    <string name="x7pro_hardware_optimization_target">Dimensity 8400 / Mali-G720</string>
++    <string name="x7pro_performance_governor">Performance Governor</string>
++    <string name="x7pro_performance_governor_description">Controls the real-frame budget used by the native FG governor. Locked 30 prioritizes each real frame at 33.333 ms; it never changes game speed.</string>
++    <string name="x7pro_performance_governor_off">Off</string>
++    <string name="x7pro_performance_governor_balanced">Balanced</string>
++    <string name="x7pro_performance_governor_locked_30">Locked 30 FPS</string>
++    <string name="x7pro_detailed_performance_overlay">Detailed Performance Overlay</string>
++    <string name="x7pro_detailed_performance_overlay_description">Shows measured render intervals and profile state. Metrics without reliable instrumentation are marked N/A.</string>
++    <string name="x7pro_fg_governor">FG Governor</string>
++    <string name="x7pro_fg_governor_description">Auto drops a synthetic frame before it can make a late real frame worse. Requires Mali Native Frame Generation to be enabled.</string>
++    <string name="x7pro_fg_governor_off">Off</string>
++    <string name="x7pro_fg_governor_auto">Auto</string>
+     <string name="frame_gen_multiplier">Frame multiplier</string>
+     <string name="frame_gen_multiplier_description">How many frames to display for each rendered frame. Higher values cost proportionally more GPU time. Asking for more than your display can present will slow emulation down.</string>
+     <string name="frame_gen_multiplier_2x">2x</string>
+diff --git a/src/common/android/poco_x7pro_profile.cpp b/src/common/android/poco_x7pro_profile.cpp
+index d5b6e7f..276a133 100644
+--- a/src/common/android/poco_x7pro_profile.cpp
++++ b/src/common/android/poco_x7pro_profile.cpp
+@@ -2,9 +2,12 @@
+ // SPDX-License-Identifier: GPL-3.0-or-later
+ 
+ #include <algorithm>
++#include <array>
+ #include <cctype>
+ #include <chrono>
++#include <iomanip>
+ #include <mutex>
++#include <sstream>
+ #include <string>
+ 
+ #include <sys/system_properties.h>
+@@ -12,6 +15,7 @@
+ 
+ #include "common/android/poco_x7pro_profile.h"
+ #include "common/logging.h"
++#include "common/settings.h"
+ #include "common/thread.h"
+ 
+ namespace Common::Android {
+@@ -21,6 +25,7 @@ struct ProfileState {
+     std::once_flag device_once;
+     std::mutex mutex;
+     bool poco_x7_pro{};
++    bool dimensity_8400{};
+     bool mali_g720{};
+     std::string vulkan_model;
+     std::string vulkan_driver;
+@@ -29,9 +34,13 @@ struct ProfileState {
+     std::string frame_gen_phase{"inactive"};
+     u64 real_frames{};
+     u64 generated_frames{};
++    u64 dropped_synthetic_frames{};
+     std::chrono::steady_clock::time_point last_real_frame{};
+     f64 real_frame_ms{};
+     u64 real_frames_over_budget{};
++    std::array<f64, 180> frame_samples{};
++    size_t frame_sample_count{};
++    size_t next_frame_sample{};
+ };
+ 
+ ProfileState& State() {
+@@ -55,6 +64,62 @@ bool Has(const std::string& value, std::string_view needle) {
+     return value.find(needle) != std::string::npos;
+ }
+ 
++std::string Compact(std::string value) {
++    value.erase(std::remove_if(value.begin(), value.end(), [](unsigned char c) {
++        return !std::isalnum(c);
++    }), value.end());
++    return value;
++}
++
++bool HardwareOptimizationEnabledLocked(const ProfileState& state) {
++    // 0 = auto, 1 = standard, 2 = manually request the target path. A manual request never
++    // treats an incompatible GPU as a Mali-G720.
++    const u32 mode = Settings::values.x7pro_hardware_optimization.GetValue();
++    return mode != 1 && state.dimensity_8400 && state.mali_g720;
++}
++
++void RefreshProfileStatusLocked(ProfileState& state) {
++    if (!state.mali_g720) {
++        state.status = "gpu-mismatch";
++    } else if (!state.dimensity_8400) {
++        state.status = "soc-mismatch";
++    } else if (!HardwareOptimizationEnabledLocked(state)) {
++        state.status = "inactive-standard";
++    } else {
++        state.status = "active";
++    }
++}
++
++std::string FormatMilliseconds(f64 value) {
++    if (value <= 0.0) {
++        return "N/A";
++    }
++    std::ostringstream stream;
++    stream << std::fixed << std::setprecision(2) << value << " ms";
++    return stream.str();
++}
++
++std::string FormatFps(f64 frame_time) {
++    if (frame_time <= 0.0) {
++        return "N/A";
++    }
++    std::ostringstream stream;
++    stream << std::fixed << std::setprecision(1) << (1000.0 / frame_time) << " FPS";
++    return stream.str();
++}
++
++f64 Percentile(const ProfileState& state, f64 percentile) {
++    if (state.frame_sample_count == 0) {
++        return 0.0;
++    }
++    std::array<f64, 180> samples{};
++    std::copy_n(state.frame_samples.begin(), state.frame_sample_count, samples.begin());
++    std::sort(samples.begin(), samples.begin() + state.frame_sample_count);
++    const size_t index = std::min(state.frame_sample_count - 1,
++                                  static_cast<size_t>((state.frame_sample_count - 1) * percentile));
++    return samples[index];
++}
++
+ const char* RoleName(PocoX7ProThreadRole role) {
+     switch (role) {
+     case PocoX7ProThreadRole::GpuSubmission:
+@@ -80,19 +145,29 @@ void DetectPocoX7ProDevice() {
+     std::call_once(state.device_once, [&] {
+         const std::string soc = Lower(Property("ro.soc.model") + " " +
+                                       Property("ro.board.platform") + " " +
+-                                      Property("ro.mediatek.platform"));
++                                      Property("ro.mediatek.platform") + " " +
++                                      Property("ro.vendor.mediatek.platform") + " " +
++                                      Property("ro.hardware"));
+         const std::string product = Lower(Property("ro.product.manufacturer") + " " +
+                                           Property("ro.product.brand") + " " +
+                                           Property("ro.product.model") + " " +
+-                                          Property("ro.product.device"));
++                                          Property("ro.product.device") + " " +
++                                          Property("ro.product.vendor.model") + " " +
++                                          Property("ro.product.odm.model"));
+ 
+-        const bool mt6899 = Has(soc, "mt6899") || Has(soc, "dimensity 8400");
+-        const bool poco_x7 = Has(product, "poco x7 pro") || Has(product, "x7 pro");
++        const bool mt6899 = Has(soc, "mt6899") || Has(soc, "dimensity 8400") ||
++                            Has(soc, "dimensity8400");
++        const bool poco_x7 = Has(product, "poco x7 pro") || Has(product, "x7 pro") ||
++                             Has(product, "rodin") || Has(product, "2412dpc0a");
+         const bool xiaomi = Has(product, "xiaomi") || Has(product, "poco") || Has(product, "redmi");
+ 
+         std::scoped_lock lock{state.mutex};
+-        state.poco_x7_pro = mt6899 && poco_x7 && xiaomi;
+-        state.status = state.poco_x7_pro ? "waiting-for-mali-g720" : "device-mismatch";
++        state.poco_x7_pro = poco_x7 && (xiaomi || Has(product, "rodin") ||
++                                        Has(product, "2412dpc0a"));
++        // A recognised POCO X7 Pro device signature is a reliable Dimensity 8400-family identity
++        // even on firmware that omits the commercial SoC name from public system properties.
++        state.dimensity_8400 = mt6899 || state.poco_x7_pro;
++        state.status = state.dimensity_8400 ? "waiting-for-mali-g720" : "device-mismatch";
+         LOG_INFO(Common, "[MALI-FG] device profile: soc='{}' product='{}' result={}", soc, product,
+                  state.status);
+     });
+@@ -103,17 +178,17 @@ void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view
+     DetectPocoX7ProDevice();
+     auto& state = State();
+     const std::string model = Lower(std::string{model_name});
+-    const bool reported_mali_g720 = Has(model, "mali-g720") || Has(model, "mali g720") ||
+-                                    Has(model, "g720");
++    const std::string driver = Lower(std::string{driver_name});
++    const std::string compact_identity = Compact(model + " " + driver);
++    const bool reported_mali_g720 = Has(compact_identity, "malig720") ||
++                                    Has(compact_identity, "g720mc");
+ 
+     std::scoped_lock lock{state.mutex};
+-    // The SoC/product gate identifies the physical GPU on a stock POCO X7 Pro. Some Android
+-    // Vulkan stacks expose a board-specific device name instead of "Mali-G720".
+-    const bool x7_pro_driver_fallback = state.poco_x7_pro && !model.empty();
+-    state.mali_g720 = reported_mali_g720 || x7_pro_driver_fallback;
+-    state.status = state.poco_x7_pro && state.mali_g720
+-                       ? (reported_mali_g720 ? "active" : "active-profile-fallback")
+-                       : "gpu-mismatch";
++    // Identity is deliberately independent from capability checks: a valid Mali-G720 model name
++    // activates the hardware profile, while unsupported Vulkan features disable only the feature
++    // that needs them. This accepts names such as "Mali-G720 MC7" and vendor-prefixed variants.
++    state.mali_g720 = reported_mali_g720;
++    RefreshProfileStatusLocked(state);
+     state.vulkan_model = std::string{model_name};
+     state.vulkan_driver = std::string{driver_name};
+     if (!state.logged) {
+@@ -125,11 +200,10 @@ void UpdatePocoX7ProVulkanDevice(std::string_view driver_name, std::string_view
+     }
+ }
+ 
+-void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64 real_frames, u64 generated_frames) {
++void UpdatePocoX7ProFrameGenStatus(std::string_view phase, u64, u64 generated_frames) {
+     auto& state = State();
+     std::scoped_lock lock{state.mutex};
+     state.frame_gen_phase = phase;
+-    state.real_frames = real_frames;
+     state.generated_frames = generated_frames;
+ }
+ 
+@@ -142,29 +216,51 @@ void RecordPocoX7ProRealFrame() {
+             std::chrono::duration<f64, std::milli>(now - state.last_real_frame).count();
+         state.real_frame_ms = frame_time;
+         state.real_frames_over_budget += frame_time > 33.333 ? 1 : 0;
++        state.frame_samples[state.next_frame_sample] = frame_time;
++        state.next_frame_sample = (state.next_frame_sample + 1) % state.frame_samples.size();
++        state.frame_sample_count = std::min(state.frame_sample_count + 1, state.frame_samples.size());
+     }
+     state.last_real_frame = now;
++    ++state.real_frames;
+ }
+ 
+ bool ShouldGeneratePocoX7ProFrame() {
+     DetectPocoX7ProDevice();
+     auto& state = State();
+     std::scoped_lock lock{state.mutex};
+-    // Real emulation takes priority: do not schedule a synthetic frame after a late real frame.
+-    return state.real_frame_ms == 0.0 || state.real_frame_ms <= 34.5;
++    RefreshProfileStatusLocked(state);
++    if (!Settings::values.mali_native_frame_gen.GetValue() || !HardwareOptimizationEnabledLocked(state)) {
++        return false;
++    }
++    if (Settings::values.x7pro_fg_governor.GetValue() == 0) {
++        return true;
++    }
++    // Auto governor gives source frames priority. Locked 30 uses the actual 33.333 ms budget;
++    // balanced has a small tolerance but still drops a synthetic frame before adding more work.
++    const u32 performance_mode = Settings::values.x7pro_performance_governor.GetValue();
++    // Off keeps the independent FG safety guard; Balanced relaxes it slightly, while Locked 30
++    // makes the actual 33.333 ms source-frame budget the priority.
++    const f64 budget = performance_mode == 2 ? 33.333 : performance_mode == 1 ? 36.0 : 34.5;
++    const bool generate = state.real_frame_ms == 0.0 || state.real_frame_ms <= budget;
++    if (!generate) {
++        ++state.dropped_synthetic_frames;
++    }
++    return generate;
+ }
+ 
+ bool IsPocoX7ProProfileActive() {
+     DetectPocoX7ProDevice();
+     auto& state = State();
+     std::scoped_lock lock{state.mutex};
+-    return state.poco_x7_pro && state.mali_g720;
++    RefreshProfileStatusLocked(state);
++    return HardwareOptimizationEnabledLocked(state);
+ }
+ 
+ std::string PocoX7ProProfileStatus() {
+     DetectPocoX7ProDevice();
+     auto& state = State();
+     std::scoped_lock lock{state.mutex};
++    RefreshProfileStatusLocked(state);
+     return state.status;
+ }
+ 
+@@ -178,6 +271,42 @@ std::string PocoX7ProFrameGenDiagnostics() {
+            " | gpu=" + state.vulkan_model + " | driver=" + state.vulkan_driver;
+ }
+ 
++std::string PocoX7ProPerformanceDiagnostics() {
++    DetectPocoX7ProDevice();
++    auto& state = State();
++    std::scoped_lock lock{state.mutex};
++    RefreshProfileStatusLocked(state);
++
++    const bool profile_active = HardwareOptimizationEnabledLocked(state);
++    const bool pacing_active = profile_active &&
++                               Settings::values.x7pro_performance_governor.GetValue() != 0;
++    const f64 p95 = Percentile(state, 0.95);
++    const f64 p99 = Percentile(state, 0.99);
++    std::ostringstream stream;
++    stream << "Device: " << (state.poco_x7_pro ? "POCO X7 Pro / compatible target" : "N/A") << '\n'
++           << "SoC profile: " << (state.dimensity_8400 ? "Dimensity 8400 family" : "N/A") << '\n'
++           << "GPU: " << (state.vulkan_model.empty() ? "N/A" : state.vulkan_model) << '\n'
++           << "Hardware Profile: " << (profile_active ? "ACTIVE" : "INACTIVE") << '\n'
++           << "CPU Optimization: " << (profile_active ? "ACTIVE" : "INACTIVE") << '\n'
++           << "Mali Optimization: " << (profile_active ? "ACTIVE" : "INACTIVE") << '\n'
++           << "Frame Pacing: " << (pacing_active ? "ACTIVE" : "INACTIVE") << '\n'
++           << "Real FPS: " << FormatFps(state.real_frame_ms) << '\n'
++           << "Presented FPS: N/A" << '\n'
++           << "Frame Time: " << FormatMilliseconds(state.real_frame_ms) << '\n'
++           << "CPU Time: N/A" << '\n'
++           << "GPU Time: N/A" << '\n'
++           << "Shader Time: N/A" << '\n'
++           << "Present Time: N/A" << '\n'
++           << "FG Time: N/A" << '\n'
++           << "1% Low (real): " << FormatFps(p99) << '\n'
++           << "P95: " << FormatMilliseconds(p95) << '\n'
++           << "P99: " << FormatMilliseconds(p99) << '\n'
++           << "Bottleneck: N/A" << '\n'
++           << "Synthetic Frames: " << state.generated_frames << '\n'
++           << "Dropped Synthetic Frames: " << state.dropped_synthetic_frames;
++    return stream.str();
++}
++
+ void ApplyPocoX7ProThreadAffinity(PocoX7ProThreadRole role) {
+     if (!IsPocoX7ProProfileActive()) {
+         return;
+diff --git a/src/common/android/poco_x7pro_profile.h b/src/common/android/poco_x7pro_profile.h
+index a40f613..0b58a19 100644
+--- a/src/common/android/poco_x7pro_profile.h
++++ b/src/common/android/poco_x7pro_profile.h
+@@ -31,6 +31,7 @@ void RecordPocoX7ProRealFrame();
+ [[nodiscard]] bool IsPocoX7ProProfileActive();
+ [[nodiscard]] std::string PocoX7ProProfileStatus();
+ [[nodiscard]] std::string PocoX7ProFrameGenDiagnostics();
++[[nodiscard]] std::string PocoX7ProPerformanceDiagnostics();
+ 
+ // Safe no-op for every device other than a recognised POCO X7 Pro / MT6899 / Mali-G720. Affinity
+ // errors are logged by the central thread policy implementation and never make emulation fail.
+diff --git a/src/common/settings.h b/src/common/settings.h
+index 8447371..ffe5820 100644
+--- a/src/common/settings.h
++++ b/src/common/settings.h
+@@ -507,6 +507,39 @@ struct Values {
+         linkage, false, "mali_native_frame_gen_debug_overlay", Category::Renderer,
+         Specialization::Default, true, false, &mali_native_frame_gen};
+ 
++    // Persisted controls for the POCO X7 Pro Android flavor. They are consumed by the Android
++    // profile at runtime; selecting the target mode never invents unsupported Vulkan features.
++    SwitchableSetting<u32, true> x7pro_hardware_optimization{linkage,
++                                                               0,
++                                                               0,
++                                                               2,
++                                                               "x7pro_hardware_optimization",
++                                                               Category::Renderer,
++                                                               Specialization::Countable,
++                                                               true,
++                                                               false};
++    SwitchableSetting<u32, true> x7pro_performance_governor{linkage,
++                                                              1,
++                                                              0,
++                                                              2,
++                                                              "x7pro_performance_governor",
++                                                              Category::Renderer,
++                                                              Specialization::Countable,
++                                                              true,
++                                                              false};
++    SwitchableSetting<bool> x7pro_detailed_performance_overlay{
++        linkage, false, "x7pro_detailed_performance_overlay", Category::Renderer,
++        Specialization::Default, true, false};
++    SwitchableSetting<u32, true> x7pro_fg_governor{linkage,
++                                                     1,
++                                                     0,
++                                                     1,
++                                                     "x7pro_fg_governor",
++                                                     Category::Renderer,
++                                                     Specialization::Countable,
++                                                     true,
++                                                     false};
++
+     SwitchableSetting<bool> use_asynchronous_gpu_emulation{linkage,
+ #ifdef __ANDROID__
+         true,
