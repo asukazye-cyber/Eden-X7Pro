@@ -10,16 +10,14 @@
 namespace Vulkan::X7NX {
 
 MaliG7xxPolicy BuildMaliG7xxPolicy(const Device& device) {
-    const auto profile = Common::Android::X7NX::DeviceProfile::Instance().Snapshot();
     MaliG7xxPolicy policy{};
-    policy.enabled = profile.kind == Common::Android::X7NX::DeviceKind::PocoX7ProDimensity8400 &&
-                     profile.mali_g7xx && device.GetDriverID() == VK_DRIVER_ID_ARM_PROPRIETARY;
+    policy.enabled = device.X7Backend().IsMaliG720();
     if (!policy.enabled) {
         return policy;
     }
     policy.use_synchronization2 = device.HasSynchronization2();
     policy.use_precise_barriers = policy.use_synchronization2;
-    policy.use_dummy_descriptors = !device.HasNullDescriptor();
+    policy.use_dummy_descriptors = !device.X7Backend().UseNativeNullDescriptors(device.HasNullDescriptor());
     policy.prefer_transient_attachments = device.IsTiler();
     policy.reuse_attachment_resources = true;
     // Render-pass feedback has correctness-sensitive aliasing/lifetime requirements. Preserve

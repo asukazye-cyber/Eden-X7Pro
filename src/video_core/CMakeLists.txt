@@ -314,6 +314,10 @@ if (ENABLE_X7NX)
     target_sources(video_core PRIVATE
         renderer_vulkan/x7nx_backend.cpp
         renderer_vulkan/x7nx_backend.h
+        renderer_vulkan/x7nx_gpu_backend.h
+        renderer_vulkan/x7nx_gpu_backend.cpp
+        renderer_vulkan/x7nx_descriptors.cpp
+        renderer_vulkan/x7nx_descriptors.h
         renderer_vulkan/x7nx_game_profile.cpp
         renderer_vulkan/x7nx_game_profile.h
         renderer_vulkan/x7nx_mali_policy.cpp

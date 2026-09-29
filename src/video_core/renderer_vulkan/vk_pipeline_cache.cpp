@@ -37,6 +37,7 @@
 #ifdef HAS_X7NX
 #include "common/android/x7nx_telemetry.h"
 #include "video_core/renderer_vulkan/x7nx_game_profile.h"
+#include "video_core/renderer_vulkan/x7nx_shader_legalizer.h"
 #endif
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
@@ -897,6 +898,9 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
 
         const auto runtime_info{MakeRuntimeInfo(programs, key, program, previous_stage, device)};
         ConvertLegacyToGeneric(program, runtime_info);
+#ifdef HAS_X7NX
+        X7NX::LegalizeShader(device, program);
+#endif
         const std::vector<u32> code{EmitSPIRV(profile, runtime_info, program, binding)};
         device.SaveShader(code);
         modules[stage_index] = BuildShader(device, code);
@@ -1025,6 +1029,9 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
                     max_shared_memory / 1024);
         program.shared_memory_size = max_shared_memory;
     }
+#ifdef HAS_X7NX
+    X7NX::LegalizeShader(device, program);
+#endif
     const std::vector<u32> code{EmitSPIRV(profile, program)};
     device.SaveShader(code);
     vk::ShaderModule spv_module{BuildShader(device, code)};

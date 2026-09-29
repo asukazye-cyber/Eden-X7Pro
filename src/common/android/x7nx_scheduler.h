@@ -24,6 +24,7 @@ struct CpuCoreInfo {
     s32 cpu{};
     s64 capacity{};
     s64 max_frequency_khz{};
+    s64 current_frequency_khz{};
     u64 midr{};
     s64 l2_cache_bytes{};
 };
@@ -34,9 +35,8 @@ struct CpuTopology {
     bool topology_complete{};
 };
 
-// Frame deadlines influence priority, but never guest emulation timing. Affinity is applied only
-// when the kernel exposes a complete, heterogeneous topology. A725 all-big devices remain free
-// to use all permitted cores rather than treating lower-frequency cores as "efficiency" cores.
+// Frame deadlines influence priority, never guest timing. Android retains affinity/cpuset control;
+// different frequency bins of an all-A725 SoC must not be treated as efficiency cores.
 class ThreadPolicy final {
 public:
     static CpuTopology ProbeTopology();

@@ -3,6 +3,8 @@
 
 #pragma once
 
+namespace Shader::IR { struct Program; }
+
 namespace Vulkan {
 class Device;
 }
@@ -19,5 +21,7 @@ enum class DescriptorLegalization {
 // existing Eden dummy image descriptor fallback.
 [[nodiscard]] DescriptorLegalization SelectDescriptorLegalization(const Device& device);
 [[nodiscard]] bool NeedsDummyDescriptor(const Device& device);
+// An actual IR pass, called after translation and before SPIR-V for graphics and compute.
+void LegalizeShader(const Device& device, Shader::IR::Program& program);
 
 } // namespace Vulkan::X7NX

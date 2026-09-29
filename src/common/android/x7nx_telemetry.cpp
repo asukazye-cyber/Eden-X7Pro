@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "common/android/x7nx_telemetry.h"
+#ifndef NDEBUG
 
 #include <algorithm>
 #include <array>
@@ -89,3 +90,4 @@ void Telemetry::LogSummaryIfDue() {
 }
 
 } // namespace Common::Android::X7NX
+#endif

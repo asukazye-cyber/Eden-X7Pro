@@ -93,7 +93,7 @@ ThreadPriority PriorityFor(ThreadRole role, std::chrono::nanoseconds deadline) {
 CpuTopology ThreadPolicy::ProbeTopology() {
     CpuTopology topology;
     cpu_set_t allowed{};
-    if (sched_getaffinity(getpid(), sizeof(allowed), &allowed) != 0) {
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) != 0) {
         return topology;
     }
     const long total = sysconf(_SC_NPROCESSORS_CONF);
@@ -109,6 +109,7 @@ CpuTopology ThreadPolicy::ProbeTopology() {
         CpuCoreInfo info{.cpu = cpu,
                          .capacity = ReadDecimal(base + "cpu_capacity"),
                          .max_frequency_khz = ReadDecimal(base + "cpufreq/cpuinfo_max_freq"),
+                         .current_frequency_khz = ReadDecimal(base + "cpufreq/scaling_cur_freq"),
                          .midr = ReadHex(base + "regs/identification/midr_el1"),
                          .l2_cache_bytes = ReadCacheSize(cpu)};
         topology.allowed_cores.push_back(info);
@@ -129,21 +130,11 @@ void ThreadPolicy::ApplyCurrentThread(ThreadRole role, std::chrono::nanoseconds 
     }
     const CpuTopology topology = ProbeTopology();
     SetCurrentThreadPriority(PriorityFor(role, frame_deadline));
-    if (topology.all_big_core || !topology.topology_complete) {
-        SetCurrentThreadToAllCores();
-        LOG_DEBUG(Common, "[X7NX] role={} uses all allowed cores (all-big={} complete={})",
-                  RoleName(role), topology.all_big_core, topology.topology_complete);
-        return;
-    }
-
-    // A non-target/heterogeneous firmware can still have a meaningful capacity split. Leave
-    // background work to Eden's conservative policy; critical roles receive the measured fast set.
-    if (role == ThreadRole::ShaderCompiler || role == ThreadRole::IO || role == ThreadRole::Background) {
-        SetCurrentThreadToBackgroundWork();
-    } else {
-        SetCurrentThreadToPerformanceCores();
-    }
-    LOG_DEBUG(Common, "[X7NX] role={} uses measured heterogeneous topology", RoleName(role));
+    // No evidence that a static affinity mask outperforms Android EAS. Preserve the current
+    // thread's allowed mask, including vendor thermal/cpuset restrictions, on every firmware.
+    LOG_DEBUG(Common, "[X7NX] role={} Android-managed affinity (all-big={} complete={} allowed={})",
+              RoleName(role), topology.all_big_core, topology.topology_complete,
+              topology.allowed_cores.size());
 }
 
 } // namespace Common::Android::X7NX

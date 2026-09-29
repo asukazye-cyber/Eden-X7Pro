@@ -30,6 +30,23 @@ struct TelemetrySnapshot {
 
 class Telemetry final {
 public:
+#ifdef NDEBUG
+    // Instrumentation is deliberately compiled out of performance builds. Inline calls disappear
+    // without locks, sampling, sorting or GPU timing claims; debug builds retain the collector.
+    static Telemetry& Instance() { static Telemetry telemetry; return telemetry; }
+    void RecordCpuFrame(f64) {}
+    void RecordGpuFrame(f64) {}
+    void RecordPipelineCacheHit() {}
+    void RecordPipelineCacheMiss() {}
+    void RecordShaderCompileStall(f64) {}
+    void RecordPrewarm(size_t) {}
+    void RecordBarriers(u32) {}
+    void RecordDeviceLost() {}
+    void SetDeviceMemoryBytes(u64) {}
+    void SetRendererPath(const std::string&) {}
+    [[nodiscard]] TelemetrySnapshot Snapshot() const { return {}; }
+    void LogSummaryIfDue() {}
+#else
     static Telemetry& Instance();
 
     void RecordCpuFrame(f64 milliseconds);
@@ -44,6 +61,7 @@ public:
     void SetRendererPath(std::string path);
     [[nodiscard]] TelemetrySnapshot Snapshot() const;
     void LogSummaryIfDue();
+#endif
 
 private:
     Telemetry() = default;

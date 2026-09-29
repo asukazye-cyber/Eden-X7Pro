@@ -13,17 +13,7 @@
 namespace Vulkan::X7NX {
 
 void Backend::Initialize(const Device& device) {
-    Common::Android::X7NX::DeviceProfile::Instance().UpdateVulkanCapabilities({
-        .model_name = std::string{device.GetModelName()},
-        .driver_name = device.GetDriverName(),
-        .api_version = device.ApiVersion(),
-        .driver_version = device.GetDriverVersion(),
-        .arm_proprietary_driver = device.GetDriverID() == VK_DRIVER_ID_ARM_PROPRIETARY,
-        .synchronization2 = device.HasSynchronization2(),
-        .null_descriptor = device.HasNullDescriptor(),
-        .dynamic_rendering = device.ApiVersion() >= VK_API_VERSION_1_3,
-        .memory_budget = device.CanReportMemoryUsage(),
-    });
+    // Device construction already captured enabled capabilities before any resource cache existed.
     mali_policy = BuildMaliG7xxPolicy(device);
     uma_policy = BuildUmaMemoryPolicy(mali_policy.enabled);
     Common::Android::X7NX::Telemetry::Instance().SetRendererPath(RendererPathName(mali_policy));
@@ -32,10 +22,13 @@ void Backend::Initialize(const Device& device) {
 }
 
 void Backend::BeginFrame() {
+#ifndef NDEBUG
     frame_start = std::chrono::steady_clock::now();
+#endif
 }
 
 void Backend::EndFrame(const Device& device) {
+#ifndef NDEBUG
     if (frame_start.time_since_epoch().count() == 0) {
         return;
     }
@@ -47,6 +40,7 @@ void Backend::EndFrame(const Device& device) {
         telemetry.SetDeviceMemoryBytes(device.GetDeviceMemoryUsage());
     }
     telemetry.LogSummaryIfDue();
+#endif
 }
 
 } // namespace Vulkan::X7NX

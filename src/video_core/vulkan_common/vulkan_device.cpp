@@ -771,6 +771,9 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR 
 
     // Initialize GPU logging if enabled
     InitializeGPULogging();
+#ifdef HAS_X7NX
+    x7_backend = X7NX::CreateGpuBackend(*this);
+#endif
 }
 
 Device::~Device() {

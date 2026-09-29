@@ -2626,6 +2626,14 @@ ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::ImageInfo&
 
 ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::NullImageViewParams& params)
     : VideoCommon::ImageViewBase{params}, device{&runtime.device} {
+#ifdef HAS_X7NX
+    if (device->X7Backend().IsMaliG720()) {
+        x7_dummy = std::make_unique<X7NX::MaliDescriptorCompatibilityLayer>(
+            *device, runtime.memory_allocator, runtime.scheduler);
+        supports_depth_comparison = true;
+        return;
+    }
+#endif
     if (device->HasNullDescriptor()
 #ifdef HAS_X7NX
         && !X7NX::NeedsDummyDescriptor(*device)
@@ -2683,7 +2691,14 @@ VkImageView ImageView::ColorView() {
 }
 
 VkImageView ImageView::StorageView(Shader::TextureType texture_type,
-                                   Shader::ImageFormat image_format) {
+                                   Shader::ImageFormat image_format, bool integer) {
+#ifdef HAS_X7NX
+    if (x7_dummy) {
+        const VkFormat target = image_format == Shader::ImageFormat::Typeless
+            ? (integer ? VK_FORMAT_R32G32B32A32_UINT : VK_FORMAT_R8G8B8A8_UNORM) : Format(image_format);
+        return x7_dummy->Storage(texture_type, target);
+    }
+#endif
     if (image_handle) {
         if (image_format == Shader::ImageFormat::Typeless) {
             if (!typeless_storage_view) {
@@ -2707,6 +2722,19 @@ VkImageView ImageView::StorageView(Shader::TextureType texture_type,
 
 bool ImageView::IsRescaled() const noexcept {
     return (*slot_images)[image_id].IsRescaled();
+}
+
+VkImageView ImageView::SampledView(Shader::TextureType type, bool integer, bool depth, bool multisample) {
+#ifdef HAS_X7NX
+    if (x7_dummy) return x7_dummy->Sampled(type, integer, depth, multisample);
+#endif
+    return Handle(type);
+}
+VkSampler ImageView::DummySampler(bool depth) const {
+#ifdef HAS_X7NX
+    if (x7_dummy) return x7_dummy->Sampler(depth);
+#endif
+    return VK_NULL_HANDLE;
 }
 
 vk::ImageView ImageView::MakeView(VkFormat vk_format, VkImageAspectFlags aspect_mask,

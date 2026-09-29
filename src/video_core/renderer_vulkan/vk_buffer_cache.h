@@ -42,6 +42,7 @@ public:
     [[nodiscard]] VkBuffer Handle() const noexcept {
         return *buffer;
     }
+    [[nodiscard]] u32 NullBindingSize() const noexcept { return null_binding_size; }
 
     [[nodiscard]] VkDeviceAddress DeviceAddress() const noexcept {
         return device_address;
@@ -87,6 +88,7 @@ private:
     std::vector<BufferView> views;
     VideoCommon::UsageTracker tracker;
     VkDeviceAddress device_address{};
+    u32 null_binding_size{};
     u64 last_usage_tick{};
     bool is_null{};
     bool sparse_compatible{};
@@ -213,12 +215,11 @@ public:
     }
 
     void BindStorageBuffer(const Buffer& buffer, u32 offset, u32 size,
-                           [[maybe_unused]] bool is_written) {
-        BindBuffer(buffer, offset, size);
-    }
+                           bool is_written);
 
     void BindTextureBuffer(Buffer& buffer, u32 offset, u32 size,
                            VideoCore::Surface::PixelFormat format) {
+        if (buffer.NullBindingSize()) { offset = 0; size = buffer.NullBindingSize(); }
         guest_descriptor_queue.AddTexelBuffer(buffer.View(offset, size, format),
                                               buffer.DeviceAddress(), offset, size,
                                               TexelBufferFormat(format));
@@ -234,6 +235,7 @@ public:
 
 private:
     void BindBuffer(const Buffer& buffer, u32 offset, u32 size) {
+        if (buffer.NullBindingSize()) { offset = 0; size = buffer.NullBindingSize(); }
         const VkBuffer handle = buffer.Handle();
         if (handle == VK_NULL_HANDLE) {
             guest_descriptor_queue.AddBuffer(handle, 0, 0, VK_WHOLE_SIZE);
@@ -257,6 +259,7 @@ private:
     std::shared_ptr<QuadStripIndexBuffer> quad_strip_index_buffer;
 
     vk::Buffer null_buffer;
+    vk::Buffer storage_null_buffer;
 
     std::unique_ptr<Uint8Pass> uint8_pass;
     QuadIndexedPass quad_index_pass;

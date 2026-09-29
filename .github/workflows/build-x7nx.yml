@@ -49,7 +49,9 @@ jobs:
 
       - name: Validate X7NX phase 1 contracts
         shell: bash
-        run: python3 tests/validate_x7nx_phase1.py
+        run: |
+          python3 tests/validate_x7nx_phase1.py
+          python3 tests/validate_x7nx_backend.py
 
       - name: Build standalone X7NX APK
         shell: bash

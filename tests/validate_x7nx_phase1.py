@@ -38,7 +38,7 @@ def main() -> None:
     assert "CopyClone" in policy and "HasSynchronization2" in policy
     assert "null_descriptor" in profile
     assert (ROOT / "src/video_core/renderer_vulkan/x7nx_backend.cpp").exists()
-    assert "device.GetDriverName()" in read("src/video_core/renderer_vulkan/x7nx_backend.cpp")
+    assert "device.GetDriverName()" in read("src/video_core/renderer_vulkan/x7nx_gpu_backend.cpp")
     assert "AllowsNullDescriptor" in buffer_cache
     assert "X7NX::CacheNamespace(device)" in pipeline_cache
     assert "RecordPrewarm(state.total)" in pipeline_cache

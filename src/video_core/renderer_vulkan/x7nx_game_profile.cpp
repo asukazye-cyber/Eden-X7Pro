@@ -29,7 +29,8 @@ std::string CacheNamespace(const Device& device) {
         device.GetDriverID() != VK_DRIVER_ID_ARM_PROPRIETARY) {
         return "eden-compatible";
     }
-    return fmt::format("x7nx-vk{:08x}-drv{:08x}", device.ApiVersion(), device.GetDriverVersion());
+    // IR legalization and descriptor semantics changed; old SPIR-V/pipeline blobs are not reused.
+    return fmt::format("x7nx-abi3-vk{:08x}-drv{:08x}", device.ApiVersion(), device.GetDriverVersion());
 }
 
 } // namespace Vulkan::X7NX

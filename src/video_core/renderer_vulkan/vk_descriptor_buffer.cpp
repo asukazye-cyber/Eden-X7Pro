@@ -32,11 +32,17 @@ DescriptorBufferRing::DescriptorBufferRing(const Device& device_,
     // limited to the proprietary ARM G720 path avoids changing the generic mobile tiler policy.
     // A larger ring reduces the chance of a CPU-side Scheduler::Finish() when descriptor-heavy
     // scenes exhaust the generic 2 MiB tiler budget.
+#ifdef HAS_X7NX
+    const bool is_mali_g720 = device.X7Backend().IsMaliG720();
+    const VkDeviceSize frame_size = device.X7Backend().DescriptorArenaBytes(
+        device.IsTiler() ? TILER_FRAME_SIZE : DESKTOP_FRAME_SIZE);
+#else
     const bool is_mali_g720{device.GetDriverID() == VK_DRIVER_ID_ARM_PROPRIETARY &&
                             device.GetModelName().find("Mali-G720") != std::string_view::npos};
     const VkDeviceSize frame_size{is_mali_g720   ? MALI_G720_FRAME_SIZE
                                   : device.IsTiler() ? TILER_FRAME_SIZE
                                                      : DESKTOP_FRAME_SIZE};
+#endif
     if (is_mali_g720) {
         LOG_INFO(Render_Vulkan, "Mali-G720 descriptor ring budget: {} MiB",
                  MALI_G720_FRAME_SIZE / (1024 * 1024));

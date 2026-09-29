@@ -17,6 +17,9 @@
 #include "video_core/texture_cache/image_view_base.h"
 #include "video_core/vulkan_common/vulkan_memory_allocator.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
+#ifdef HAS_X7NX
+#include "video_core/renderer_vulkan/x7nx_descriptors.h"
+#endif
 
 namespace Settings {
 struct ResolutionScalingInfo;
@@ -420,7 +423,9 @@ public:
     [[nodiscard]] VkImageView ColorView();
 
     [[nodiscard]] VkImageView StorageView(Shader::TextureType texture_type,
-                                          Shader::ImageFormat image_format);
+                                          Shader::ImageFormat image_format, bool integer = false);
+    [[nodiscard]] VkImageView SampledView(Shader::TextureType type, bool integer, bool depth, bool multisample);
+    [[nodiscard]] VkSampler DummySampler(bool depth) const;
 
     [[nodiscard]] bool IsRescaled() const noexcept;
 
@@ -487,6 +492,9 @@ private:
     vk::ImageView stencil_view;
     vk::ImageView color_view;
     vk::Image null_image;
+#ifdef HAS_X7NX
+    std::unique_ptr<X7NX::MaliDescriptorCompatibilityLayer> x7_dummy;
+#endif
     VkImage image_handle = VK_NULL_HANDLE;
     VkImageView render_target = VK_NULL_HANDLE;
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;

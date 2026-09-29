@@ -18,6 +18,9 @@
 #include "common/logging.h"
 #include "common/settings.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
+#ifdef HAS_X7NX
+#include "video_core/renderer_vulkan/x7nx_gpu_backend.h"
+#endif
 
 VK_DEFINE_HANDLE(VmaAllocator)
 
@@ -906,6 +909,9 @@ FN_MAX_LIMIT_LIST
     bool HasSynchronization2() const {
         return extensions.synchronization2;
     }
+#ifdef HAS_X7NX
+    const X7NX::X7GpuBackend& X7Backend() const { return *x7_backend; }
+#endif
 
     /// Returns the minimum supported version of SPIR-V.
     u32 SupportedSpirvVersion() const {
@@ -1250,6 +1256,9 @@ private:
 
     /// Nsight Aftermath GPU crash tracker
     std::unique_ptr<NsightAftermathTracker> nsight_aftermath_tracker;
+#ifdef HAS_X7NX
+    std::unique_ptr<X7NX::X7GpuBackend> x7_backend;
+#endif
 };
 
 } // namespace Vulkan

@@ -110,6 +110,9 @@ Buffer::Buffer(BufferCacheRuntime& runtime, VideoCommon::NullBufferParams null_p
     device = &runtime.device;
     buffer = runtime.CreateNullBuffer();
     is_null = true;
+#ifdef HAS_X7NX
+    if (device->X7Backend().IsMaliG720()) null_binding_size = 16 * 1024;
+#endif
     if (device->IsBufferDeviceAddressSupported()) {
         device_address = device->GetLogical().GetBufferDeviceAddress(*buffer);
     }
@@ -144,6 +147,9 @@ VkBufferView Buffer::View(u32 offset, u32 size, VideoCore::Surface::PixelFormat 
         // Null buffer not supported, adjust offset and size
         offset = 0;
         size = 0;
+#ifdef HAS_X7NX
+        if (device->X7Backend().IsMaliG720()) size = 16 * 1024;
+#endif
     }
     const auto it{std::ranges::find_if(views, [offset, size, format](const BufferView& view) {
         return offset == view.offset && size == view.size && format == view.format;
@@ -740,6 +746,19 @@ void BufferCacheRuntime::ReserveNullBuffer() {
     }
 }
 
+void BufferCacheRuntime::BindStorageBuffer(const Buffer& buffer, u32 offset, u32 size,
+                                          [[maybe_unused]] bool is_written) {
+    if (!buffer.NullBindingSize()) {
+        BindBuffer(buffer, offset, size);
+        return;
+    }
+    // Isolate writable missing SSBOs from zero UBO/vertex/texture-buffer backing.
+    if (!storage_null_buffer) storage_null_buffer = CreateNullBuffer();
+    const VkDeviceAddress address = device.IsBufferDeviceAddressSupported()
+        ? device.GetLogical().GetBufferDeviceAddress(*storage_null_buffer) : 0;
+    guest_descriptor_queue.AddBuffer(*storage_null_buffer, address, 0, buffer.NullBindingSize());
+}
+
 vk::Buffer BufferCacheRuntime::CreateNullBuffer() {
     VkBufferCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -752,6 +771,14 @@ vk::Buffer BufferCacheRuntime::CreateNullBuffer() {
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices = nullptr,
     };
+#ifdef HAS_X7NX
+    const bool x7_dummy = device.X7Backend().IsMaliG720();
+    if (x7_dummy) {
+        create_info.size = 16 * 1024; // Fits the Vulkan minimum maxUniformBufferRange.
+        create_info.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+    }
+#endif
     if (device.IsExtTransformFeedbackSupported()) {
         create_info.usage |= VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT;
     }
@@ -764,8 +791,26 @@ vk::Buffer BufferCacheRuntime::CreateNullBuffer() {
     }
 
     scheduler.RequestOutsideRenderPassOperationContext();
-    scheduler.Record([buffer = *ret](vk::CommandBuffer cmdbuf) {
+    scheduler.Record([buffer = *ret
+#ifdef HAS_X7NX
+                      , x7_dummy
+#endif
+                     ](vk::CommandBuffer cmdbuf) {
         cmdbuf.FillBuffer(buffer, 0, VK_WHOLE_SIZE, 0);
+#ifdef HAS_X7NX
+        if (x7_dummy) {
+            const VkBufferMemoryBarrier barrier{.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT |
+                    VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+                    VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .buffer = buffer, .offset = 0, .size = VK_WHOLE_SIZE};
+            cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
+                vk::PIPELINE_STAGE_GRAPHICS_COMPUTE | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
+                    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, {}, barrier, {});
+        }
+#endif
     });
 
     return ret;

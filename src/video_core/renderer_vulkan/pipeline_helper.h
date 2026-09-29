@@ -365,13 +365,16 @@ inline void PushImageDescriptors(TextureCache& texture_cache,
             const VideoCommon::ImageViewId image_view_id{(views++)->id};
             const VideoCommon::SamplerId sampler_id{*(samplers++)};
             ImageView& image_view{texture_cache.GetImageView(image_view_id)};
-            VkImageView vk_image_view{image_view.Handle(desc.type)};
+            ImageView* bound_view = &image_view;
+            VkImageView vk_image_view{image_view.SampledView(desc.type, desc.is_integer, desc.is_depth, desc.is_multisample)};
             if (vk_image_view == VK_NULL_HANDLE) {
-                const VkImageView null_image_view{texture_cache.GetImageView(VideoCommon::NULL_IMAGE_VIEW_ID).Handle(desc.type)};
+                bound_view = &texture_cache.GetImageView(VideoCommon::NULL_IMAGE_VIEW_ID);
+                const VkImageView null_image_view{bound_view->SampledView(desc.type, desc.is_integer, desc.is_depth, desc.is_multisample)};
                 if (null_image_view != VK_NULL_HANDLE) vk_image_view = null_image_view;
             }
             Sampler& sampler{texture_cache.GetSampler(sampler_id)};
-            guest_descriptor_queue.AddSampledImage(vk_image_view,
+            const VkSampler dummy_sampler = bound_view->DummySampler(desc.is_depth);
+            guest_descriptor_queue.AddSampledImage(vk_image_view, dummy_sampler ? dummy_sampler :
                                                    sampler.HandleFor(image_view, desc.is_depth));
             const bool element_rescaled{texture_cache.IsRescaling(image_view)};
             is_rescaled |= element_rescaled;
@@ -385,7 +388,7 @@ inline void PushImageDescriptors(TextureCache& texture_cache,
             if (desc.is_written) {
                 texture_cache.MarkModification(image_view.image_id);
             }
-            const VkImageView vk_image_view{image_view.StorageView(desc.type, desc.format)};
+            const VkImageView vk_image_view{image_view.StorageView(desc.type, desc.format, desc.is_integer)};
             guest_descriptor_queue.AddImage(vk_image_view);
             const bool element_rescaled{texture_cache.IsRescaling(image_view)};
             is_rescaled |= element_rescaled;
