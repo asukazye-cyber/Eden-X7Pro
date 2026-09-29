@@ -16,9 +16,7 @@ enum class DescriptorLegalization {
     DummyDescriptor,
 };
 
-// Kept next to the guest-IR-to-SPIR-V pipeline so future rewrites (image access bounds and
-// unsupported descriptor forms) have a single ownership point. The current valid rewrite is the
-// existing Eden dummy image descriptor fallback.
+// Central policy for descriptor backing, separate from instruction-level IR legalization below.
 [[nodiscard]] DescriptorLegalization SelectDescriptorLegalization(const Device& device);
 [[nodiscard]] bool NeedsDummyDescriptor(const Device& device);
 // An actual IR pass, called after translation and before SPIR-V for graphics and compute.

@@ -785,12 +785,12 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineSlowPath() {
     const auto [pair, is_new]{graphics_cache.try_emplace(graphics_key)};
     auto& pipeline{pair->second};
     if (is_new) {
-#ifdef HAS_X7NX
+#if defined(HAS_X7NX) && !defined(NDEBUG)
         Common::Android::X7NX::Telemetry::Instance().RecordPipelineCacheMiss();
         const auto started = std::chrono::steady_clock::now();
 #endif
         pipeline = CreateGraphicsPipeline();
-#ifdef HAS_X7NX
+#if defined(HAS_X7NX) && !defined(NDEBUG)
         const auto elapsed = std::chrono::duration<f64, std::milli>(
             std::chrono::steady_clock::now() - started).count();
         if (elapsed >= 1.0) {

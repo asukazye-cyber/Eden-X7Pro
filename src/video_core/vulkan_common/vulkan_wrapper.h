@@ -180,6 +180,7 @@ struct InstanceDispatch {
     PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr{};
     PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2{};
     PFN_vkGetPhysicalDeviceFormatProperties vkGetPhysicalDeviceFormatProperties{};
+    PFN_vkGetPhysicalDeviceImageFormatProperties vkGetPhysicalDeviceImageFormatProperties{};
     PFN_vkGetPhysicalDeviceFormatProperties2 vkGetPhysicalDeviceFormatProperties2{};
     PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties{};
     PFN_vkGetPhysicalDeviceMemoryProperties2 vkGetPhysicalDeviceMemoryProperties2{};

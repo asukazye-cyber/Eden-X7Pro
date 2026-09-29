@@ -49,11 +49,16 @@ VkImageView MaliDescriptorCompatibilityLayer::Get(Shader::TextureType type, VkFo
         (storage ? VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT : VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
     if (!device.IsFormatSupported(format, required, FormatType::Optimal))
         throw vk::Exception(VK_ERROR_FORMAT_NOT_SUPPORTED);
+    const VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        (storage ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT);
+    VkImageFormatProperties properties{};
+    vk::Check(device.GetDispatchLoader().vkGetPhysicalDeviceImageFormatProperties(
+        device.GetPhysical(), format, image_type, VK_IMAGE_TILING_OPTIMAL, usage, flags, &properties));
+    if (properties.maxArrayLayers < layers)
+        throw vk::Exception(VK_ERROR_FORMAT_NOT_SUPPORTED);
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
     if (multisample) {
-        const auto limits = device.GetPhysical().GetProperties().limits;
-        const auto supported = depth ? limits.sampledImageDepthSampleCounts :
-            format == VK_FORMAT_R32G32B32A32_UINT ? limits.sampledImageIntegerSampleCounts : limits.sampledImageColorSampleCounts;
+        const auto supported = properties.sampleCounts;
         if (supported & VK_SAMPLE_COUNT_2_BIT) samples = VK_SAMPLE_COUNT_2_BIT;
         else if (supported & VK_SAMPLE_COUNT_4_BIT) samples = VK_SAMPLE_COUNT_4_BIT;
         else throw vk::Exception(VK_ERROR_FORMAT_NOT_SUPPORTED);
@@ -62,7 +67,7 @@ VkImageView MaliDescriptorCompatibilityLayer::Get(Shader::TextureType type, VkFo
     entry.image = allocator.CreateImage({.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .flags = flags, .imageType = image_type, .format = format, .extent = {1, 1, 1},
         .mipLevels = 1, .arrayLayers = layers, .samples = samples, .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | (storage ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT),
+        .usage = usage,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED});
     const VkImageAspectFlags aspect = depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
     const VkImageSubresourceRange range{aspect, 0, 1, 0, layers};
