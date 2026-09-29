@@ -148,7 +148,8 @@ VkBufferView Buffer::View(u32 offset, u32 size, VideoCore::Surface::PixelFormat 
         offset = 0;
         size = 0;
 #ifdef HAS_X7NX
-        if (device->X7Backend().IsMaliG720()) size = 16 * 1024;
+        // 48 is divisible by all uncompressed texel sizes up to RGBA32, including RGB32.
+        if (device->X7Backend().IsMaliG720()) size = null_binding_size / 48 * 48;
 #endif
     }
     const auto it{std::ranges::find_if(views, [offset, size, format](const BufferView& view) {

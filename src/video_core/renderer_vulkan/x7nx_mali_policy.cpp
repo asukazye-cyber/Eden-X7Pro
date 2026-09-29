@@ -16,17 +16,13 @@ MaliG7xxPolicy BuildMaliG7xxPolicy(const Device& device) {
         return policy;
     }
     policy.use_synchronization2 = device.HasSynchronization2();
-    policy.use_precise_barriers = policy.use_synchronization2;
     policy.use_dummy_descriptors = !device.X7Backend().UseNativeNullDescriptors(device.HasNullDescriptor());
-    policy.prefer_transient_attachments = device.IsTiler();
-    policy.reuse_attachment_resources = true;
     // Render-pass feedback has correctness-sensitive aliasing/lifetime requirements. Preserve
     // Eden's copy/clone fallback until replay validation proves the tile-local path for a driver.
     policy.framebuffer_feedback = FeedbackPath::CopyClone;
     LOG_INFO(Render_Vulkan,
-             "[X7NX] Mali-G7xx policy: sync2={} dummy_descriptors={} transient_attachments={} feedback=copy-clone",
-             policy.use_synchronization2, policy.use_dummy_descriptors,
-             policy.prefer_transient_attachments);
+             "[X7NX] Mali-G7xx capabilities: sync2={} dummy_descriptors={} feedback=Eden-copy-clone",
+             policy.use_synchronization2, policy.use_dummy_descriptors);
     return policy;
 }
 

@@ -219,7 +219,7 @@ public:
 
     void BindTextureBuffer(Buffer& buffer, u32 offset, u32 size,
                            VideoCore::Surface::PixelFormat format) {
-        if (buffer.NullBindingSize()) { offset = 0; size = buffer.NullBindingSize(); }
+        if (buffer.NullBindingSize()) { offset = 0; size = buffer.NullBindingSize() / 48 * 48; }
         guest_descriptor_queue.AddTexelBuffer(buffer.View(offset, size, format),
                                               buffer.DeviceAddress(), offset, size,
                                               TexelBufferFormat(format));

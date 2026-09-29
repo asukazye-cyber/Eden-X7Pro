@@ -13,16 +13,12 @@ namespace Vulkan::X7NX {
 
 enum class FeedbackPath : u8 {
     CopyClone,
-    TileLocal,
 };
 
 struct MaliG7xxPolicy {
     bool enabled{};
     bool use_synchronization2{};
-    bool use_precise_barriers{};
     bool use_dummy_descriptors{};
-    bool prefer_transient_attachments{};
-    bool reuse_attachment_resources{};
     FeedbackPath framebuffer_feedback{FeedbackPath::CopyClone};
 };
 

@@ -13,6 +13,10 @@ jobs:
     name: Android ARM64 build
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
+      CCACHE_BASEDIR: ${{ github.workspace }}
 
     steps:
       - name: Check out X7NX
@@ -25,6 +29,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Restore native compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: x7nx-arm64-ndk28-${{ github.sha }}
+          restore-keys: x7nx-arm64-ndk28-
 
       - name: Install Android build components
         shell: bash
@@ -74,14 +85,26 @@ jobs:
           apk="$(find artifacts -maxdepth 1 -type f -name 'app-x7nx-release.apk' -print -quit)"
           test -n "$apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='org.x7nx.emulator'"
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -q 'application-debuggable'; then
+            echo 'Refusing a debuggable APK'; exit 1
+          fi
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
           unzip -l "$apk" | grep -F 'lib/arm64-v8a/libyuzu-android.so'
           mkdir -p dist
           cp "$apk" dist/X7NX-Experimental.apk
+          (cd dist && sha256sum X7NX-Experimental.apk > SHA256SUMS.txt)
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
           name: X7NX-Experimental-${{ github.run_number }}
-          path: dist/X7NX-Experimental.apk
+          path: dist/*
           if-no-files-found: error
           retention-days: 90
+
+      - name: Save native compiler cache even after compiler failure
+        if: always() && !cancelled()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: x7nx-arm64-ndk28-${{ github.sha }}

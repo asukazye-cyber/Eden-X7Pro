@@ -6,7 +6,6 @@
 #include <chrono>
 
 #include "video_core/renderer_vulkan/x7nx_mali_policy.h"
-#include "video_core/renderer_vulkan/x7nx_uma_memory_policy.h"
 
 namespace Vulkan {
 class Device;
@@ -23,11 +22,9 @@ public:
     void EndFrame(const Device& device);
 
     [[nodiscard]] const MaliG7xxPolicy& Policy() const { return mali_policy; }
-    [[nodiscard]] const UmaMemoryPolicy& MemoryPolicy() const { return uma_policy; }
 
 private:
     MaliG7xxPolicy mali_policy{};
-    UmaMemoryPolicy uma_policy{};
     std::chrono::steady_clock::time_point frame_start{};
 };
 

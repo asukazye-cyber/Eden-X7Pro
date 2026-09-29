@@ -15,10 +15,9 @@ namespace Vulkan::X7NX {
 void Backend::Initialize(const Device& device) {
     // Device construction already captured enabled capabilities before any resource cache existed.
     mali_policy = BuildMaliG7xxPolicy(device);
-    uma_policy = BuildUmaMemoryPolicy(mali_policy.enabled);
     Common::Android::X7NX::Telemetry::Instance().SetRendererPath(RendererPathName(mali_policy));
-    LOG_INFO(Render_Vulkan, "[X7NX] backend initialized: active={} UMA={} feedback={}",
-             mali_policy.enabled, uma_policy.active, RendererPathName(mali_policy));
+    LOG_INFO(Render_Vulkan, "[X7NX] backend initialized: active={} allocator=Eden-VMA feedback={}",
+             mali_policy.enabled, RendererPathName(mali_policy));
 }
 
 void Backend::BeginFrame() {

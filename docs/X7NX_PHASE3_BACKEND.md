@@ -38,7 +38,8 @@ Eden still owns render targets, alias tracking, framebuffer feedback/clone, rend
 general resource transitions, allocation/suballocation, staging/readback, texture conversion/cache,
 ASTC decoding, command pools/submission, and disk pipeline prewarming. Existing load/store and
 sync2 conversion are reused; no unproved discard or global barrier removal was added. The previous
-UMA/game policy structs do not constitute replacement managers or learned prewarm databases.
+unused UMA policy scaffold and inert transient-attachment flags were removed; game profile metadata
+does not constitute a learned prewarm database. Removed scaffolding is recoverable in Git history.
 
 Tile-local fetch/input attachments cannot safely replace arbitrary guest texture feedback solely
 because a Vulkan extension exists: coordinates, sample/format semantics, aliasing, ordering and
@@ -49,3 +50,7 @@ manager with explicit proof of same-pixel access before choosing a tile-local pa
 
 Validation includes source contracts, deterministic bitfield reference properties and Android
 Release compilation. It does not replace Vulkan validation or physical POCO game testing.
+
+`tests/x7nx_host/run.sh` compiles the actual IR pass/emitter/cleanup and evaluates 35,904 lowered
+expressions, plus non-target, dynamic and invalid-range preservation cases. Only the Vulkan device
+policy is replaced by a host-test seam; this is not a driver or SPIR-V execution test.

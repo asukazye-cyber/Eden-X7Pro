@@ -324,8 +324,6 @@ if (ENABLE_X7NX)
         renderer_vulkan/x7nx_mali_policy.h
         renderer_vulkan/x7nx_shader_legalizer.cpp
         renderer_vulkan/x7nx_shader_legalizer.h
-        renderer_vulkan/x7nx_uma_memory_policy.cpp
-        renderer_vulkan/x7nx_uma_memory_policy.h
     )
     target_compile_definitions(video_core PUBLIC HAS_X7NX)
 endif()
