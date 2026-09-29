@@ -308,10 +308,8 @@ void RendererVulkan::Report() const {
 vk::Buffer RendererVulkan::RenderToBuffer(std::span<const Tegra::FramebufferConfig> framebuffers,
                                           const Layout::FramebufferLayout& layout, VkFormat format,
                                           VkDeviceSize buffer_size) {
-#ifdef HAS_X7NX
-    // Explicit user capture only; the X7NX UMA policy prohibits hot-path readback.
-    ASSERT(X7NX::IsReadbackAllowed(X7NX::ReadbackReason::ExplicitCapture));
-#endif
+    // Preserve Eden's explicit capture/readback path. X7NX does not yet replace its allocator
+    // or readback scheduling; a constant-true policy assertion did not enforce such a policy.
     auto frame = [&]() {
         Frame f{};
         f.image =

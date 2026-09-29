@@ -38,4 +38,7 @@ assert "#ifdef NDEBUG" in read("src/common/android/x7nx_telemetry.h")
 scheduler = read("src/common/android/x7nx_scheduler.cpp")
 assert "SetCurrentThreadTo" not in scheduler
 assert "scaling_cur_freq" in scheduler
+renderer = read("src/video_core/renderer_vulkan/renderer_vulkan.cpp")
+assert "IsReadbackAllowed" not in renderer
+assert "ReadbackReason" not in renderer
 print("X7NX backend source contracts and bitfield reference properties: OK")
