@@ -316,6 +316,7 @@ if (ENABLE_X7NX)
         renderer_vulkan/x7nx_backend.h
         renderer_vulkan/x7nx_gpu_backend.h
         renderer_vulkan/x7nx_gpu_backend.cpp
+        renderer_vulkan/x7nx_render_targets.h
         renderer_vulkan/x7nx_descriptors.cpp
         renderer_vulkan/x7nx_descriptors.h
         renderer_vulkan/x7nx_game_profile.cpp

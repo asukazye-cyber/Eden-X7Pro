@@ -243,7 +243,14 @@ void TextureCache<P>::CheckFeedbackLoop(std::span<const ImageViewInOut> views) {
         return;
     }
 
-    if (render_targets_serial == last_feedback_loop_serial &&
+    // A shader can select a different subset of views without modifying TIC descriptors.
+    // Precise subresource decisions must inspect this draw's views, not reuse a boolean keyed
+    // only by descriptor-table and render-target serials.
+    bool precise_feedback = false;
+    if constexpr (requires { runtime.UsePreciseFeedbackChecks(); }) {
+        precise_feedback = runtime.UsePreciseFeedbackChecks();
+    }
+    if (!precise_feedback && render_targets_serial == last_feedback_loop_serial &&
         texture_bindings_serial == last_feedback_texture_serial) {
         if (last_feedback_loop_result) {
             runtime.BarrierFeedbackLoop();
@@ -286,6 +293,14 @@ void TextureCache<P>::CheckFeedbackLoop(std::span<const ImageViewInOut> views) {
                     continue;
             }
             if (depth_active && view_image_id == rt_depth_image_id) {
+                if constexpr (requires { runtime.FeedbackLoopMayOverlap(
+                    slot_image_views[view.id], slot_image_views[render_targets.depth_buffer_id]); }) {
+                    if (precise_feedback && !runtime.FeedbackLoopMayOverlap(
+                            slot_image_views[view.id],
+                            slot_image_views[render_targets.depth_buffer_id])) {
+                        continue;
+                    }
+                }
                 return true;
             }
         }

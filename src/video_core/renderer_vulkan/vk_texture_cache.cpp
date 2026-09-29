@@ -21,6 +21,7 @@
 #include "video_core/renderer_vulkan/vk_texture_cache.h"
 #ifdef HAS_X7NX
 #include "video_core/renderer_vulkan/x7nx_shader_legalizer.h"
+#include "video_core/renderer_vulkan/x7nx_render_targets.h"
 #endif
 #include "video_core/gpu_logging/gpu_logging.h"
 
@@ -1128,6 +1129,37 @@ void TextureCacheRuntime::EraseResolveShadow(VkImage msaa_image) {
 
 void TextureCacheRuntime::BarrierFeedbackLoop() {
     scheduler.RequestOutsideRenderPassOperationContext();
+}
+
+bool TextureCacheRuntime::UsePreciseFeedbackChecks() const {
+#ifdef HAS_X7NX
+    return device.X7Backend().UseSubresourceFeedbackChecks();
+#else
+    return false;
+#endif
+}
+
+bool TextureCacheRuntime::FeedbackLoopMayOverlap(const ImageView& sampled,
+                                                const ImageView& attachment) const {
+#ifdef HAS_X7NX
+    using Manager = X7NX::MaliFramebufferFeedbackManager;
+    const auto ordinary_2d = [](const ImageView& view) {
+        return (view.type == VideoCommon::ImageViewType::e2D ||
+                view.type == VideoCommon::ImageViewType::e2DArray) &&
+               !True(view.flags & VideoCommon::ImageViewFlagBits::Slice);
+    };
+    const bool comparable = UsePreciseFeedbackChecks() && ordinary_2d(sampled) &&
+        ordinary_2d(attachment) && sampled.ImageHandle() != VK_NULL_HANDLE &&
+        sampled.ImageHandle() == attachment.ImageHandle() && sampled.format == attachment.format &&
+        sampled.Samples() == attachment.Samples();
+    const auto range = [](const ImageView& view) {
+        return Manager::Range{view.range.base.level, view.range.extent.levels,
+                              view.range.base.layer, view.range.extent.layers};
+    };
+    return Manager::MayOverlap(range(sampled), range(attachment), comparable);
+#else
+    return true;
+#endif
 }
 
 void TextureCacheRuntime::ReinterpretImage(Image& dst, Image& src,

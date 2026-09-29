@@ -20,6 +20,9 @@
 #include "common/settings.h"
 #include "video_core/renderer_vulkan/vk_master_semaphore.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
+#ifdef HAS_X7NX
+#include "video_core/renderer_vulkan/x7nx_render_targets.h"
+#endif
 
 namespace VideoCommon {
 template <typename Trait>
@@ -312,6 +315,9 @@ private:
     std::function<void()> on_submit;
 
     State state;
+#ifdef HAS_X7NX
+    X7NX::MaliRenderTargetManager x7_render_targets;
+#endif
 
     u32 num_renderpass_images = 0;
     std::array<VkImage, 9> renderpass_images{};

@@ -147,6 +147,8 @@ public:
     }
 
     void BarrierFeedbackLoop();
+    bool UsePreciseFeedbackChecks() const;
+    bool FeedbackLoopMayOverlap(const ImageView& sampled, const ImageView& attachment) const;
 
     bool IsFormatDitherable(VideoCore::Surface::PixelFormat format);
     bool IsFormatScalable(VideoCore::Surface::PixelFormat format);

@@ -63,6 +63,9 @@ jobs:
         run: |
           python3 tests/validate_x7nx_phase1.py
           python3 tests/validate_x7nx_backend.py
+          python3 tests/validate_x7nx_framebuffer.py
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -Isrc tests/x7nx_render_targets.cpp -o /tmp/x7nx-render-targets-test
+          /tmp/x7nx-render-targets-test
 
       - name: Build standalone X7NX APK
         shell: bash

@@ -16,6 +16,8 @@ public:
     virtual bool UseNativeNullDescriptors(bool supported) const { return supported; }
     virtual VkDeviceSize DescriptorArenaBytes(VkDeviceSize fallback) const { return fallback; }
     virtual bool LegalizeBitfields() const { return false; }
+    virtual bool ReuseClearRenderPasses() const { return false; }
+    virtual bool UseSubresourceFeedbackChecks() const { return false; }
 };
 class MaliGpuBackend : public X7GpuBackend {
 public:
@@ -25,6 +27,8 @@ public:
 class MaliG720Backend final : public MaliGpuBackend {
 public:
     bool IsMaliG720() const override { return true; }
+    bool ReuseClearRenderPasses() const override { return true; }
+    bool UseSubresourceFeedbackChecks() const override { return true; }
     VkDeviceSize DescriptorArenaBytes(VkDeviceSize) const override { return 3 * 1024 * 1024; }
 };
 std::unique_ptr<X7GpuBackend> CreateGpuBackend(const Device& device);

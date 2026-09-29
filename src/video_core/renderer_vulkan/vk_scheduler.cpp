@@ -104,6 +104,17 @@ void Scheduler::BeginRenderPassImpl(const Framebuffer* framebuffer, VkRenderPass
     state.renderpass = renderpass;
     state.framebuffer = framebuffer_handle;
     state.render_area = render_area;
+#ifdef HAS_X7NX
+    const auto& base = framebuffer->RenderPassKeyBase();
+    // This scheduler only requests base or CLEAR variants. Restrict reuse to single-sample
+    // STORE variants: do not defer MSAA resolves or extend a DONT_CARE store to later draws.
+    const bool clear_store_only = X7NX::MaliRenderTargetManager::Eligible(
+        device.X7Backend().ReuseClearRenderPasses(), renderpass != framebuffer->RenderPass(),
+        base.samples, base.resolve_color || base.resolve_depth_stencil,
+        base.color_discard_mask || base.depth_stencil_discard || framebuffer->DiscardsMsaaColor() ||
+            framebuffer->DiscardsMsaaDepthStencil());
+    x7_render_targets.Begin(framebuffer, render_area.width, render_area.height, clear_store_only);
+#endif
 
     if (GPU::Logging::IsActive() && Settings::values.gpu_log_vulkan_calls.GetValue()) {
         const std::string render_pass_info =
@@ -213,6 +224,14 @@ void Scheduler::RequestRenderpass(const Framebuffer* framebuffer) {
     const VkRenderPass renderpass = framebuffer->RenderPass();
     const VkFramebuffer framebuffer_handle = framebuffer->Handle();
     const VkExtent2D render_area = framebuffer->RenderArea();
+#ifdef HAS_X7NX
+    // Vulkan render-pass compatibility ignores load/store operations. The load clear already
+    // happened; ending and reloading this identical framebuffer adds no required operation.
+    if (state.renderpass && state.framebuffer == framebuffer_handle &&
+        x7_render_targets.CanContinue(framebuffer, render_area.width, render_area.height)) {
+        return;
+    }
+#endif
     if (renderpass == state.renderpass && framebuffer_handle == state.framebuffer &&
         render_area.width == state.render_area.width &&
         render_area.height == state.render_area.height) {
@@ -491,6 +510,9 @@ void Scheduler::EndRenderPass()
 #endif
 
         state.renderpass = VkRenderPass{};
+#ifdef HAS_X7NX
+        x7_render_targets.End();
+#endif
         num_renderpass_images = 0;
     }
 
