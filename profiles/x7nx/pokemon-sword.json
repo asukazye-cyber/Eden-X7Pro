@@ -1,0 +1,12 @@
+{
+  "title_id": "0100ABF008968000",
+  "name": "Pokémon Sword",
+  "phase": 1,
+  "policies": {
+    "pipeline_prewarm": true,
+    "framebuffer_feedback": "copy-clone",
+    "depth_stencil": "default",
+    "frame_generation": "disabled"
+  },
+  "rationale": "Prewarm only Eden's own recorded pipeline cache. Do not alter game timing or render scale."
+}

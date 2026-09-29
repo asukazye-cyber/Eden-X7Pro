@@ -1,0 +1,12 @@
+{
+  "title_id": "0100E0B012D02000",
+  "name": "NieR:Automata The End of YoRHa Edition",
+  "phase": 1,
+  "policies": {
+    "pipeline_prewarm": true,
+    "framebuffer_feedback": "copy-clone",
+    "depth_stencil": "conservative",
+    "frame_generation": "disabled"
+  },
+  "rationale": "Keep depth/stencil and render-to-texture synchronization conservative pending target-device replay evidence."
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "X7NX replay capture",
+  "type": "object",
+  "required": ["title_id", "device", "driver", "renderer_path", "samples"],
+  "properties": {
+    "title_id": { "type": "string", "pattern": "^[0-9A-Fa-f]{16}$" },
+    "device": { "type": "string" },
+    "driver": { "type": "string" },
+    "renderer_path": { "type": "string" },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cpu_frame_ms", "barriers", "cache_hits", "cache_misses"],
+        "properties": {
+          "cpu_frame_ms": { "type": "number", "exclusiveMinimum": 0 },
+          "gpu_frame_ms": { "type": "number", "exclusiveMinimum": 0 },
+          "barriers": { "type": "integer", "minimum": 0 },
+          "cache_hits": { "type": "integer", "minimum": 0 },
+          "cache_misses": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

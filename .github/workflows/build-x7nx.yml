@@ -1,0 +1,85 @@
+name: Build X7NX Experimental APK
+
+on:
+  push:
+    branches: [x7nx-phase1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android ARM64 build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out X7NX
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android build components
+        shell: bash
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;28.2.13676358"
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+
+      - name: Install native prerequisites
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ccache clang glslang-tools lld ninja-build pkg-config
+          python3 -m pip install --user 'cmake==3.31.6'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Validate X7NX phase 1 contracts
+        shell: bash
+        run: python3 tests/validate_x7nx_phase1.py
+
+      - name: Build standalone X7NX APK
+        shell: bash
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+          CCACHE: 'true'
+        run: |
+          cd src/android
+          chmod +x ./gradlew
+          ./gradlew copyX7nxReleaseOutputs \
+            -Dorg.gradle.caching=true \
+            -Dorg.gradle.parallel=true \
+            -PYUZU_ANDROID_ARGS="-DUSE_CCACHE=true" \
+            --stacktrace
+
+      - name: Verify APK identity
+        shell: bash
+        run: |
+          apk="$(find artifacts -maxdepth 1 -type f -name 'app-x7nx-release.apk' -print -quit)"
+          test -n "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep -F "package: name='org.x7nx.emulator'"
+          unzip -l "$apk" | grep -F 'lib/arm64-v8a/libyuzu-android.so'
+          mkdir -p dist
+          cp "$apk" dist/X7NX-Experimental.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: X7NX-Experimental-${{ github.run_number }}
+          path: dist/X7NX-Experimental.apk
+          if-no-files-found: error
+          retention-days: 90

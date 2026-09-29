@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Low-resolution block matching for the self-contained Mali frame generator. Each invocation
+// writes one motion cell; the interpolation pass reuses it for a small source-image region.
+#version 460 core
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(rgba8, set = 0, binding = 0) uniform readonly image2D previous_frame;
+layout(rgba8, set = 0, binding = 1) uniform readonly image2D current_frame;
+layout(rg16f, set = 0, binding = 2) uniform writeonly image2D motion_vectors;
+layout(r8, set = 0, binding = 3) uniform writeonly image2D confidence_image;
+
+layout(push_constant) uniform MotionParameters {
+    uvec2 frame_extent;
+    uvec2 motion_extent;
+    uint motion_scale;
+    uint search_radius;
+    float confidence_bias;
+    float reserved;
+} params;
+
+float Luma(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+ivec2 ClampFrame(ivec2 coord) {
+    return clamp(coord, ivec2(0), ivec2(params.frame_extent) - ivec2(1));
+}
+
+float MatchCost(ivec2 current_coord, ivec2 candidate) {
+    const ivec2 taps[5] = ivec2[5](ivec2(0), ivec2(-2, 0), ivec2(2, 0),
+                                   ivec2(0, -2), ivec2(0, 2));
+    float cost = 0.0;
+    for (uint i = 0; i < 5; ++i) {
+        const float a = Luma(imageLoad(current_frame, ClampFrame(current_coord + taps[i])).rgb);
+        const float b = Luma(imageLoad(previous_frame,
+                                       ClampFrame(current_coord + candidate + taps[i])).rgb);
+        cost += abs(a - b);
+    }
+    return cost * 0.2;
+}
+
+void main() {
+    const ivec2 motion_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(uvec2(motion_coord), params.motion_extent))) {
+        return;
+    }
+
+    const ivec2 source_coord = ClampFrame(motion_coord * int(params.motion_scale) +
+                                          ivec2(int(params.motion_scale) / 2));
+    float best_cost = 1e20;
+    ivec2 best_offset = ivec2(0);
+    const int radius = int(params.search_radius);
+    for (int y = -radius; y <= radius; ++y) {
+        for (int x = -radius; x <= radius; ++x) {
+            const ivec2 candidate = ivec2(x, y);
+            const float cost = MatchCost(source_coord, candidate);
+            if (cost < best_cost) {
+                best_cost = cost;
+                best_offset = candidate;
+            }
+        }
+    }
+
+    // A confidence derived from the actual temporal residual prevents aggressive warping on HUD,
+    // disocclusions, fades, and material changes.
+    const float confidence = clamp(1.0 - best_cost / max(params.confidence_bias, 0.001), 0.0, 1.0);
+    imageStore(motion_vectors, motion_coord, vec4(vec2(best_offset), 0.0, 1.0));
+    imageStore(confidence_image, motion_coord, vec4(confidence, 0.0, 0.0, 1.0));
+}

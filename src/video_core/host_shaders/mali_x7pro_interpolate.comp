@@ -1,0 +1,79 @@
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Motion-compensated midpoint interpolation. This deliberately preserves the current frame for
+// low-confidence or high-edge regions instead of fabricating unstable HUD/text pixels.
+#version 460 core
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(rgba8, set = 0, binding = 0) uniform readonly image2D previous_frame;
+layout(rgba8, set = 0, binding = 1) uniform readonly image2D current_frame;
+layout(rg16f, set = 0, binding = 2) uniform readonly image2D motion_vectors;
+layout(r8, set = 0, binding = 3) uniform readonly image2D confidence_image;
+layout(rgba8, set = 0, binding = 4) uniform writeonly image2D generated_frame;
+
+layout(push_constant) uniform InterpolationParameters {
+    uvec2 frame_extent;
+    uvec2 motion_extent;
+    uint motion_scale;
+    uint reserved;
+    float interpolation_time;
+    float minimum_confidence;
+    float edge_threshold;
+    float reserved_float;
+} params;
+
+ivec2 ClampFrame(ivec2 coord) {
+    return clamp(coord, ivec2(0), ivec2(params.frame_extent) - ivec2(1));
+}
+
+vec4 LoadCurrentLinear(vec2 coord) {
+    const vec2 clamped = clamp(coord, vec2(0.0), vec2(params.frame_extent) - vec2(1.0));
+    const ivec2 base = ivec2(floor(clamped));
+    const vec2 fraction = fract(clamped);
+    const vec4 a = imageLoad(current_frame, ClampFrame(base));
+    const vec4 b = imageLoad(current_frame, ClampFrame(base + ivec2(1, 0)));
+    const vec4 c = imageLoad(current_frame, ClampFrame(base + ivec2(0, 1)));
+    const vec4 d = imageLoad(current_frame, ClampFrame(base + ivec2(1, 1)));
+    return mix(mix(a, b, fraction.x), mix(c, d, fraction.x), fraction.y);
+}
+
+vec4 LoadPreviousLinear(vec2 coord) {
+    const vec2 clamped = clamp(coord, vec2(0.0), vec2(params.frame_extent) - vec2(1.0));
+    const ivec2 base = ivec2(floor(clamped));
+    const vec2 fraction = fract(clamped);
+    const vec4 a = imageLoad(previous_frame, ClampFrame(base));
+    const vec4 b = imageLoad(previous_frame, ClampFrame(base + ivec2(1, 0)));
+    const vec4 c = imageLoad(previous_frame, ClampFrame(base + ivec2(0, 1)));
+    const vec4 d = imageLoad(previous_frame, ClampFrame(base + ivec2(1, 1)));
+    return mix(mix(a, b, fraction.x), mix(c, d, fraction.x), fraction.y);
+}
+
+float EdgeStrength(ivec2 coord) {
+    const vec3 center = imageLoad(current_frame, ClampFrame(coord)).rgb;
+    const vec3 right = imageLoad(current_frame, ClampFrame(coord + ivec2(1, 0))).rgb;
+    const vec3 down = imageLoad(current_frame, ClampFrame(coord + ivec2(0, 1))).rgb;
+    return max(length(center - right), length(center - down));
+}
+
+void main() {
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(uvec2(coord), params.frame_extent))) {
+        return;
+    }
+
+    const ivec2 motion_coord = clamp(coord / int(params.motion_scale), ivec2(0),
+                                     ivec2(params.motion_extent) - ivec2(1));
+    const vec2 motion = imageLoad(motion_vectors, motion_coord).xy;
+    float confidence = imageLoad(confidence_image, motion_coord).x;
+    if (EdgeStrength(coord) > params.edge_threshold) {
+        confidence *= 0.5;
+    }
+
+    const vec4 current = LoadCurrentLinear(vec2(coord) - motion * params.interpolation_time);
+    const vec4 previous = LoadPreviousLinear(vec2(coord) +
+                                              motion * (1.0 - params.interpolation_time));
+    const float blend = confidence >= params.minimum_confidence ? confidence : 0.0;
+    imageStore(generated_frame, coord, mix(current, previous, 0.5 * blend));
+}
