@@ -644,6 +644,7 @@ class SettingsFragmentPresenter(
             add(BooleanSetting.RENDERER_FORCE_MAX_CLOCK.key)
             add(BooleanSetting.RENDERER_REACTIVE_FLUSHING.key)
             add(BooleanSetting.X7NX_NATIVE_FRAMEBUFFER_FETCH.key)
+            add(IntSetting.X7NX_SEMANTIC_GPU_RECOMPILER.key)
             add(BooleanSetting.ENABLE_BUFFER_HISTORY.key)
             add(BooleanSetting.ENABLE_GPU_BUFFER_READBACK.key)
             add(BooleanSetting.USE_OPTIMIZED_VERTEX_BUFFERS.key)

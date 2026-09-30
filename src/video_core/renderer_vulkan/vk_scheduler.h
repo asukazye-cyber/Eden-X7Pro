@@ -22,6 +22,7 @@
 #include "video_core/vulkan_common/vulkan_wrapper.h"
 #ifdef HAS_X7NX
 #include "video_core/renderer_vulkan/x7nx_render_targets.h"
+#include "video_core/renderer_vulkan/x7_render_ir.h"
 #endif
 
 namespace VideoCommon {
@@ -74,6 +75,28 @@ public:
     /// Requests the current execution context to be able to execute operations only allowed outside
     /// of a renderpass.
     void RequestOutsideRenderPassOperationContext();
+#ifdef HAS_X7NX
+    // Only a bounded clear -> copy block is represented in this first semantic backend.
+    template <typename T>
+    void RecordSemanticImageCopy(const X7NX::RenderResource& src,
+                                 const X7NX::RenderResource& dst, X7NX::DirtyRect region,
+                                 T&& command) {
+        if (!SemanticCompilerEnabled() || semantic_ir.size != 1 ||
+            semantic_framebuffer.state != X7NX::Materialization::PendingClear) {
+            RequestOutsideRenderPassOperationContext();
+            Record(std::forward<T>(command));
+            return;
+        }
+        const auto program = CompileSemanticCopy(src, dst, region);
+        program.Execute([this](bool emit_clear) {
+            if (emit_clear) FlushDeferredClear();
+            else DiscardSemanticClear();
+        }, [&] {
+            RequestOutsideRenderPassOperationContext();
+            Record(std::forward<T>(command));
+        });
+    }
+#endif
 
     /// Returns true when a render pass is currently active in the scheduler state.
     bool IsRenderPassActive() const {
@@ -286,6 +309,14 @@ private:
 
     /// If a deferred clear is pending.
     void RealizeDeferredClear();
+#ifdef HAS_X7NX
+    bool SemanticCompilerEnabled() const;
+    void RegisterSemanticClear(const Framebuffer* framebuffer, u32 slot);
+    X7NX::MaliRenderProgram CompileSemanticCopy(const X7NX::RenderResource& src,
+                                               const X7NX::RenderResource& dst,
+                                               X7NX::DirtyRect region);
+    void DiscardSemanticClear();
+#endif
 
     void WorkerThread(std::stop_token stop_token);
 
@@ -320,6 +351,10 @@ private:
     State state;
 #ifdef HAS_X7NX
     X7NX::MaliRenderTargetManager x7_render_targets;
+    X7NX::X7RenderIR semantic_ir;
+    X7NX::VirtualFramebuffer semantic_framebuffer;
+    X7NX::RenderGraphTemplateCache semantic_cache;
+    bool semantic_elimination_logged{};
 #endif
 
     u32 num_renderpass_images = 0;

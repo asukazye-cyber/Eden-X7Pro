@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <memory>
+#include <bit>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -157,6 +158,18 @@ void Scheduler::RealizeDeferredClear() {
     }
     const DeferredClear dc = deferred_clear;
     deferred_clear = {};
+#ifdef HAS_X7NX
+    if (semantic_ir.size) {
+        semantic_ir.operations[1] = {.kind = X7NX::RenderOp::Observe,
+                                     .read = semantic_ir.operations[0].write, .reads = true};
+        semantic_ir.size = 2;
+        // Observing/unknown consumers force materialization. Never skip an observable clear.
+        const auto program = semantic_cache.Get(semantic_ir);
+        ASSERT(program.emit_clear);
+        semantic_framebuffer.Materialize();
+        semantic_ir = {};
+    }
+#endif
 
     std::array<VkClearValue, 9> clear_values{};
     u32 count = 0;
@@ -192,6 +205,9 @@ bool Scheduler::DeferColorClear(const Framebuffer* framebuffer, u32 rt_slot,
     deferred_clear.framebuffer = framebuffer;
     deferred_clear.color_clear_mask |= 1u << rt_slot;
     deferred_clear.color_values[rt_slot] = value;
+#ifdef HAS_X7NX
+    RegisterSemanticClear(framebuffer, rt_slot);
+#endif
     return true;
 }
 
@@ -206,8 +222,73 @@ bool Scheduler::DeferDepthStencilClear(const Framebuffer* framebuffer, const VkC
     deferred_clear.framebuffer = framebuffer;
     deferred_clear.depth_stencil = true;
     deferred_clear.depth_stencil_value = value;
+#ifdef HAS_X7NX
+    semantic_ir = {}; // Mixed/depth clears remain entirely on the existing path.
+#endif
     return true;
 }
+
+#ifdef HAS_X7NX
+bool Scheduler::SemanticCompilerEnabled() const {
+    const auto mode = Settings::values.x7nx_semantic_gpu_recompiler.GetValue();
+    return X7NX::SemanticModeEnabled(mode, device.X7Backend().IsMaliG720());
+}
+
+void Scheduler::RegisterSemanticClear(const Framebuffer* framebuffer, u32 slot) {
+    semantic_ir = {};
+    if (!SemanticCompilerEnabled() || slot != 0 || deferred_clear.depth_stencil ||
+        deferred_clear.color_clear_mask != 1 || framebuffer->NumImages() != 1 ||
+        framebuffer->NumColorBuffers() != 1 || framebuffer->IsRescaled() ||
+        framebuffer->Samples() != VK_SAMPLE_COUNT_1_BIT) return;
+    const auto& range = framebuffer->ImageRanges()[0];
+    if (range.aspectMask != VK_IMAGE_ASPECT_COLOR_BIT || range.levelCount != 1 ||
+        range.layerCount != 1) return;
+    const auto area = framebuffer->RenderArea();
+    X7NX::RenderResource target;
+    target.backing = std::bit_cast<u64>(framebuffer->Images()[0]);
+    target.format = static_cast<u32>(framebuffer->RenderPassKeyBase().color_formats[0]);
+    target.width = area.width;
+    target.height = area.height;
+    target.mip = range.baseMipLevel;
+    target.layer = range.baseArrayLayer;
+    target.trustworthy = area.width && area.height;
+    const X7NX::DirtyRect dirty{0, 0, area.width, area.height};
+    semantic_framebuffer.Clear(target, dirty);
+    semantic_ir.operations[0] = {.kind = X7NX::RenderOp::Clear,
+                                 .write = semantic_framebuffer.resource,
+                                 .written_region = semantic_framebuffer.dirty, .writes = true};
+    semantic_ir.size = 1;
+}
+
+X7NX::MaliRenderProgram Scheduler::CompileSemanticCopy(const X7NX::RenderResource& src,
+                                                       const X7NX::RenderResource& dst,
+                                                       X7NX::DirtyRect region) {
+    auto& clear = semantic_ir.operations[0].write;
+    // The same live VkImage proves backing identity. Hydrate guest/CPU alias metadata from the
+    // texture cache before dependency analysis; remapped/sparse resources are not trustworthy.
+    if (clear.backing == dst.backing) {
+        clear.guest_memory = dst.guest_memory;
+        clear.cpu_memory = dst.cpu_memory;
+        clear.trustworthy &= dst.trustworthy;
+    }
+    semantic_ir.operations[1] = {.kind = X7NX::RenderOp::CopyImage, .read = src, .write = dst,
+                                 .written_region = region, .writes = true, .reads = true};
+    semantic_ir.size = 2;
+    return semantic_cache.Get(semantic_ir);
+}
+
+void Scheduler::DiscardSemanticClear() {
+    ASSERT(semantic_ir.size == 2 && deferred_clear.color_clear_mask == 1 &&
+           !deferred_clear.depth_stencil);
+    deferred_clear = {};
+    semantic_ir = {};
+    semantic_framebuffer.DiscardUnobserved();
+    if (!semantic_elimination_logged) {
+        LOG_INFO(Render_Vulkan, "X7 semantic GPU compiler ACTIVE: dead clear materialization eliminated");
+        semantic_elimination_logged = true;
+    }
+}
+#endif
 
 void Scheduler::FlushDeferredClear() {
     if (deferred_clear.framebuffer == nullptr) {
@@ -251,14 +332,19 @@ void Scheduler::RequestFramebufferFetch(const Framebuffer* framebuffer) {
     if (state.renderpass == framebuffer->FetchRenderPass() &&
         state.framebuffer == framebuffer->FetchHandle()) return;
     EndRenderPass(); // Also realizes pending clears before the LOAD/input pass.
-    Record([](vk::CommandBuffer cmdbuf) {
-        const VkMemoryBarrier barrier{
-            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER, .pNext = nullptr,
-            .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
+    Record([image = framebuffer->Images()[0], range = framebuffer->ImageRanges()[0]](vk::CommandBuffer cmdbuf) {
+        const VkImageMemoryBarrier barrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .pNext = nullptr,
+            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                             VK_ACCESS_TRANSFER_WRITE_BIT,
             .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_GENERAL, .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = image, .subresourceRange = range,
         };
-        cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, barrier, {}, {});
+        cmdbuf.PipelineBarrier(vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, {}, {}, barrier);
     });
     BeginRenderPassImpl(framebuffer, framebuffer->FetchRenderPass(), nullptr, 0,
                         framebuffer->FetchHandle());

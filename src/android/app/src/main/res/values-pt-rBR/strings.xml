@@ -958,4 +958,6 @@
     <string name="license_fidelityfx_fsr_description">Upscaling de alta qualidade da AMD</string>
     <string name="x7nx_native_framebuffer_fetch">Framebuffer fetch nativo Mali (experimental)</string>
     <string name="x7nx_native_framebuffer_fetch_description">Reinicie o jogo após alterar. Exige driver Mali-G720 compatível no X7NX. Apenas leituras comprovadas do pixel local em 1×, sem MSAA e em desenhos de um triângulo são elegíveis. Os demais usam o caminho normal. Ganho de desempenho não é garantido.</string>
+    <string name="x7nx_semantic_gpu_recompiler">X7 Semantic GPU Recompiler</string>
+    <string name="x7nx_semantic_gpu_recompiler_description">AUTO ativa blocos semânticos suportados no POCO X7 Pro Mali-G720. ON habilita o caminho de desenvolvimento com verificações; OFF mantém o Eden. Escopo inicial: clears de cor não observados e totalmente sobrescritos por cópias. Demais operações usam o caminho existente.</string>
 </resources>

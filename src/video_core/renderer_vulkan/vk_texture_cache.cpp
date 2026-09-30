@@ -1606,8 +1606,7 @@ void TextureCacheRuntime::CopyImage(Image& dst, Image& src,
     });
     const VkImage dst_image = dst.Handle();
     const VkImage src_image = src.Handle();
-    scheduler.RequestOutsideRenderPassOperationContext();
-    scheduler.Record([dst_image, src_image, aspect_mask, vk_copies](vk::CommandBuffer cmdbuf) {
+    auto copy_command = [dst_image, src_image, aspect_mask, vk_copies](vk::CommandBuffer cmdbuf) {
         RangedBarrierRange dst_range;
         RangedBarrierRange src_range;
         for (const VkImageCopy& copy : vk_copies) {
@@ -1687,7 +1686,55 @@ void TextureCacheRuntime::CopyImage(Image& dst, Image& src,
                 VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                 0, nullptr, nullptr, post_barriers);
-    });
+    };
+#ifdef HAS_X7NX
+    X7NX::RenderResource source{}, destination{};
+    X7NX::DirtyRect region{};
+    if (vk_copies.size() == 1 && src.info.format == dst.info.format &&
+        aspect_mask == VK_IMAGE_ASPECT_COLOR_BIT) {
+        const auto& copy = vk_copies[0];
+        const auto describe = [](const Image& image, VkImageSubresourceLayers subresource) {
+            X7NX::RenderResource result;
+            result.backing = std::bit_cast<u64>(image.Handle());
+            result.guest_memory = {image.gpu_addr, image.guest_size_bytes};
+            result.cpu_memory = {image.cpu_addr, image.guest_size_bytes};
+            result.format = static_cast<u32>(image.info.format);
+            result.mip = subresource.mipLevel;
+            result.layer = subresource.baseArrayLayer;
+            result.layers = subresource.layerCount;
+            result.aspect = subresource.aspectMask;
+            if (result.mip < 32) {
+                result.width = std::max(1u, static_cast<u32>(image.info.size.width) >> result.mip);
+                result.height = std::max(1u, static_cast<u32>(image.info.size.height) >> result.mip);
+            }
+            const auto unknown = ImageFlagBits::Sparse | ImageFlagBits::Remapped |
+                ImageFlagBits::Converted | ImageFlagBits::Rescaled | ImageFlagBits::BadOverlap;
+            result.trustworthy = image.info.type == ImageType::e2D && image.info.num_samples == 1 &&
+                !True(image.flags & unknown) && result.layers == 1 &&
+                result.mip < static_cast<u32>(image.info.resources.levels) &&
+                result.layer < static_cast<u32>(image.info.resources.layers) &&
+                result.guest_memory.Valid() && result.cpu_memory.Valid();
+            return result;
+        };
+        source = describe(src, copy.srcSubresource);
+        destination = describe(dst, copy.dstSubresource);
+        if (copy.dstOffset.x >= 0 && copy.dstOffset.y >= 0 && copy.dstOffset.z == 0 &&
+            copy.srcOffset.x >= 0 && copy.srcOffset.y >= 0 && copy.srcOffset.z == 0 &&
+            copy.extent.depth == 1) {
+            region = {static_cast<u32>(copy.dstOffset.x), static_cast<u32>(copy.dstOffset.y),
+                      copy.extent.width, copy.extent.height};
+            const X7NX::DirtyRect source_region{static_cast<u32>(copy.srcOffset.x),
+                static_cast<u32>(copy.srcOffset.y), copy.extent.width, copy.extent.height};
+            if (!X7NX::DirtyRect{0, 0, source.width, source.height}.Contains(source_region) ||
+                !X7NX::DirtyRect{0, 0, destination.width, destination.height}.Contains(region))
+                region = {};
+        }
+    }
+    scheduler.RecordSemanticImageCopy(source, destination, region, std::move(copy_command));
+#else
+    scheduler.RequestOutsideRenderPassOperationContext();
+    scheduler.Record(std::move(copy_command));
+#endif
 }
 
 void TextureCacheRuntime::CopyImageMSAA(Image& dst, Image& src,

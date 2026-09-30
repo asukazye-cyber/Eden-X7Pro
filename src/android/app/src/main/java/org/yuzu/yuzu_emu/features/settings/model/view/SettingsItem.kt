@@ -367,6 +367,15 @@ abstract class SettingsItem(
             put(DateTimeSetting(LongSetting.CUSTOM_RTC, titleId = R.string.set_custom_rtc))
             put(
                 SingleChoiceSetting(
+                    IntSetting.X7NX_SEMANTIC_GPU_RECOMPILER,
+                    titleId = R.string.x7nx_semantic_gpu_recompiler,
+                    descriptionId = R.string.x7nx_semantic_gpu_recompiler_description,
+                    choicesId = R.array.x7SemanticNames,
+                    valuesId = R.array.x7SemanticValues
+                )
+            )
+            put(
+                SingleChoiceSetting(
                     IntSetting.RENDERER_ACCURACY,
                     titleId = R.string.renderer_accuracy,
                     descriptionId = R.string.renderer_accuracy_description,

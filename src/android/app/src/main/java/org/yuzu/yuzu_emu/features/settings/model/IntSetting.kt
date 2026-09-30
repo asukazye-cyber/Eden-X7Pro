@@ -18,6 +18,7 @@ enum class IntSetting(override val key: String) : AbstractIntSetting {
     RENDERER_NVDEC_EMULATION("nvdec_emulation"),
     RENDERER_ASTC_DECODE_METHOD("accelerate_astc"),
     RENDERER_ACCURACY("gpu_accuracy"),
+    X7NX_SEMANTIC_GPU_RECOMPILER("x7nx_semantic_gpu_recompiler"),
     RENDERER_RESOLUTION("resolution_setup"),
     RENDERER_FRAME_GEN_MULTIPLIER("frame_gen_multiplier"),
     RENDERER_FRAME_GEN_TARGET_RATE("frame_gen_target_rate"),

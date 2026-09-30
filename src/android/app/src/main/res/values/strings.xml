@@ -1879,4 +1879,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     <string name="x7nx_native_framebuffer_fetch">Mali native framebuffer fetch (experimental)</string>
     <string name="x7nx_native_framebuffer_fetch_description">Restart the game after changing. Requires a supported X7NX Mali-G720 driver. Only proven local-pixel reads at 1×, single-sample, single-triangle draws are eligible. Other draws keep the normal path. Performance is not guaranteed.</string>
+    <string name="x7nx_semantic_gpu_recompiler">X7 Semantic GPU Recompiler</string>
+    <string name="x7nx_semantic_gpu_recompiler_description">AUTO enables supported semantic blocks on the POCO X7 Pro Mali-G720. ON enables the guarded development path; OFF retains Eden. Initial scope: unobserved color clears fully overwritten by image copies. Other operations keep the existing path.</string>
 </resources>

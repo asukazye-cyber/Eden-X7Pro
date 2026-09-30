@@ -674,6 +674,8 @@ struct Values {
                                                    Category::RendererAdvanced};
     SwitchableSetting<bool> x7nx_native_framebuffer_fetch{linkage, false,
         "x7nx_native_framebuffer_fetch", Category::RendererAdvanced};
+    SwitchableSetting<u32, true> x7nx_semantic_gpu_recompiler{linkage, 0, 0, 2,
+        "x7nx_semantic_gpu_recompiler", Category::RendererAdvanced};
 
     SwitchableSetting<bool> enable_buffer_history{linkage,
                                                   false,

@@ -65,6 +65,9 @@ jobs:
           python3 tests/validate_x7nx_backend.py
           python3 tests/validate_x7nx_framebuffer.py
           python3 tests/validate_x7nx_native_fetch.py
+          python3 tests/validate_x7nx_semantic_gpu.py
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -Isrc tests/x7nx_semantic_gpu.cpp -o /tmp/x7nx-semantic-test
+          /tmp/x7nx-semantic-test
           g++ -std=c++20 -O2 -Wall -Wextra -Werror -Isrc tests/x7nx_render_targets.cpp -o /tmp/x7nx-render-targets-test
           /tmp/x7nx-render-targets-test
 
