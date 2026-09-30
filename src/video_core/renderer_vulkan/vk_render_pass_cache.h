@@ -27,6 +27,7 @@ struct RenderPassKey {
     bool depth_stencil_clear;
     u32 color_discard_mask;
     bool depth_stencil_discard;
+    bool native_color_fetch{};
 };
 
 } // namespace Vulkan
@@ -51,7 +52,8 @@ struct hash<Vulkan::RenderPassKey> {
                           (static_cast<u64>(key.resolve_color) << 32) |
                           (static_cast<u64>(key.depth_stencil_clear) << 33) |
                           (static_cast<u64>(key.resolve_depth_stencil) << 34) |
-                          (static_cast<u64>(key.depth_stencil_discard) << 35);
+                          (static_cast<u64>(key.depth_stencil_discard) << 35) |
+                          (static_cast<u64>(key.native_color_fetch) << 36);
         size_t seed = 0;
         Common::HashCombine(seed, formats);
         Common::HashCombine(seed, state);

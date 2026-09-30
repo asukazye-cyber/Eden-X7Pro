@@ -19,3 +19,15 @@ g++ -std=c++23 -O1 -DFMT_HEADER_ONLY -ffunction-sections -fdata-sections \
   "$x7nx_src/shader_recompiler/ir_opt/dead_code_elimination_pass.cpp" \
   -Wl,--gc-sections -o "$test_output/legalizer_test"
 "$test_output/legalizer_test"
+
+g++ -std=c++23 -O1 -DFMT_HEADER_ONLY -ffunction-sections -fdata-sections \
+  -I "$x7nx_src" -I "${1:-/usr/local/include}" -I "${2:-/usr/include}" \
+  "$test_root/framebuffer_fetch_test.cpp" \
+  "$x7nx_src/shader_recompiler/frontend/ir/basic_block.cpp" \
+  "$x7nx_src/shader_recompiler/frontend/ir/ir_emitter.cpp" \
+  "$x7nx_src/shader_recompiler/frontend/ir/microinstruction.cpp" \
+  "$x7nx_src/shader_recompiler/frontend/ir/opcodes.cpp" \
+  "$x7nx_src/shader_recompiler/frontend/ir/value.cpp" \
+  "$x7nx_src/shader_recompiler/frontend/ir/type.cpp" \
+  -Wl,--gc-sections -o "$test_output/framebuffer_fetch_test"
+"$test_output/framebuffer_fetch_test"

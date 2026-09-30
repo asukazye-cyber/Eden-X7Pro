@@ -661,6 +661,11 @@ Id EmitImageGatherDref(EmitContext& ctx, IR::Inst* inst, const IR::Value& index,
 
 Id EmitImageFetch(EmitContext& ctx, IR::Inst* inst, const IR::Value& index, Id coords, Id offset,
                   Id lod, Id ms) {
+    if (ctx.runtime_info.native_framebuffer_fetch) {
+        return ctx.OpImageRead(ctx.F32[4],
+            ctx.OpLoad(ctx.framebuffer_input_type, ctx.framebuffer_input),
+            ctx.ConstantComposite(ctx.U32[2], ctx.u32_zero_value, ctx.u32_zero_value));
+    }
     const auto info{inst->Flags<IR::TextureInstInfo>()};
     const bool is_integer{IsTextureInteger(ctx, info)};
     const Id result_type{is_integer ? ctx.U32[4] : ctx.F32[4]};

@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 add_library(shader_recompiler STATIC
+    ir_opt/framebuffer_fetch.h
     backend/bindings.h
     backend/spirv/emit_spirv.cpp
     backend/spirv/emit_spirv.h

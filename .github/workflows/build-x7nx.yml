@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ccache clang glslang-tools lld ninja-build pkg-config
+          sudo apt-get install --yes ccache clang glslang-tools lld ninja-build pkg-config libboost-dev
           python3 -m pip install --user 'cmake==3.31.6'
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -64,8 +64,17 @@ jobs:
           python3 tests/validate_x7nx_phase1.py
           python3 tests/validate_x7nx_backend.py
           python3 tests/validate_x7nx_framebuffer.py
+          python3 tests/validate_x7nx_native_fetch.py
           g++ -std=c++20 -O2 -Wall -Wextra -Werror -Isrc tests/x7nx_render_targets.cpp -o /tmp/x7nx-render-targets-test
           /tmp/x7nx-render-targets-test
+
+      - name: Test real shader IR transformations on host
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 https://codeload.github.com/fmtlib/fmt/zip/refs/tags/12.1.0 -o /tmp/x7nx-fmt.zip
+          echo 'e6a2b43c6ec4779fb53b15b705f7c20b4eb9d5ae35784d610ac6daec30737019  /tmp/x7nx-fmt.zip' | sha256sum -c -
+          unzip -q /tmp/x7nx-fmt.zip -d /tmp/x7nx-host-deps
+          sh tests/x7nx_host/run.sh /tmp/x7nx-host-deps/fmt-12.1.0/include /usr/include /tmp/x7nx-host-tests
 
       - name: Build standalone X7NX APK
         shell: bash

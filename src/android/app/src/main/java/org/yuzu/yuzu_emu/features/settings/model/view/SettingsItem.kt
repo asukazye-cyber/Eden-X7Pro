@@ -919,6 +919,13 @@ abstract class SettingsItem(
             )
             put(
                 SwitchSetting(
+                    BooleanSetting.X7NX_NATIVE_FRAMEBUFFER_FETCH,
+                    titleId = R.string.x7nx_native_framebuffer_fetch,
+                    descriptionId = R.string.x7nx_native_framebuffer_fetch_description
+                )
+            )
+            put(
+                SwitchSetting(
                     BooleanSetting.ENABLE_BUFFER_HISTORY,
                     titleId = R.string.enable_buffer_history,
                     descriptionId = R.string.enable_buffer_history_description

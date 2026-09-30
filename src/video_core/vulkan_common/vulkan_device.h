@@ -72,6 +72,8 @@ VK_DEFINE_HANDLE(VmaAllocator)
             primitive_topology_list_restart)                                                       \
     FEATURE(EXT, ProvokingVertex, PROVOKING_VERTEX, provoking_vertex)                              \
     FEATURE(EXT, Robustness2, ROBUSTNESS_2, robustness2)                                           \
+    FEATURE(EXT, RasterizationOrderAttachmentAccess, RASTERIZATION_ORDER_ATTACHMENT_ACCESS,       \
+            rasterization_order_attachment_access)                                                \
     FEATURE(EXT, TransformFeedback, TRANSFORM_FEEDBACK, transform_feedback)                        \
     FEATURE(EXT, VertexInputDynamicState, VERTEX_INPUT_DYNAMIC_STATE, vertex_input_dynamic_state)  \
     FEATURE(KHR, Maintenance5, MAINTENANCE_5, maintenance5)                                        \
@@ -904,6 +906,20 @@ FN_MAX_LIMIT_LIST
     }
 
     bool HasTimelineSemaphore() const;
+
+    bool SupportsNativeFramebufferFetch() const {
+#ifdef HAS_X7NX
+        return x7_backend && x7_backend->IsMaliG720() &&
+            extensions.rasterization_order_attachment_access &&
+            features.rasterization_order_attachment_access.rasterizationOrderColorAttachmentAccess;
+#else
+        return false;
+#endif
+    }
+    bool HasNativeFramebufferFetch() const {
+        return SupportsNativeFramebufferFetch() &&
+            Settings::values.x7nx_native_framebuffer_fetch.GetValue();
+    }
 
     /// Returns true if the device supports VK_KHR_synchronization2.
     bool HasSynchronization2() const {

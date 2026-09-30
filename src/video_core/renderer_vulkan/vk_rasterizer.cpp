@@ -233,7 +233,7 @@ RasterizerVulkan::~RasterizerVulkan() {
 }
 
 template <typename Func>
-void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
+void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func, bool single_triangle) {
 
     SCOPE_EXIT {
         gpu.TickWork();
@@ -248,7 +248,7 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
     std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
     // update engine as channel may be different.
     pipeline->SetEngine(maxwell3d, gpu_memory);
-    if (!pipeline->Configure(is_indexed))
+    if (!pipeline->Configure(is_indexed, single_triangle))
         return;
 
     UpdateDynamicStates();
@@ -260,6 +260,12 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
 }
 
 void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
+    const auto& state = maxwell3d->draw_manager.draw_state;
+    // A single non-instanced triangle cannot feed its own color output back through another
+    // primitive. Multi-primitive/indirect/indexed draws need a stronger guest-ordering proof.
+    const bool single_triangle = !is_indexed && instance_count == 1 &&
+        state.topology == Maxwell::PrimitiveTopology::Triangles && state.vertex_buffer.count == 3 &&
+        maxwell3d->regs.transform_feedback_enabled == 0;
     PrepareDraw(is_indexed, [this, is_indexed, instance_count] {
         const auto& draw_state = maxwell3d->draw_manager.draw_state;
         const u32 num_instances{instance_count};
@@ -289,7 +295,7 @@ void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
             GPU::Logging::GPULogger::GetInstance().LogVulkanCall(
                 is_indexed ? "vkCmdDrawIndexed" : "vkCmdDraw", params, VK_SUCCESS);
         }
-    });
+    }, single_triangle);
 }
 
 void RasterizerVulkan::DrawIndirect() {

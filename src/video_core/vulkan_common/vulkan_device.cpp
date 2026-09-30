@@ -773,6 +773,8 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR 
     InitializeGPULogging();
 #ifdef HAS_X7NX
     x7_backend = X7NX::CreateGpuBackend(*this);
+    LOG_INFO(Render_Vulkan, "X7NX native framebuffer fetch: supported={} enabled={} (draw guards required)",
+             SupportsNativeFramebufferFetch(), HasNativeFramebufferFetch());
 #endif
 }
 

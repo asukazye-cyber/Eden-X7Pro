@@ -128,13 +128,15 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
 }
 
 [[nodiscard]] VkImageUsageFlags ImageUsageFlags(const MaxwellToVK::FormatInfo& info,
-                                                PixelFormat format, bool allow_storage = true) {
+                                                PixelFormat format, bool allow_storage = true,
+                                                bool allow_input = false) {
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                               VK_IMAGE_USAGE_SAMPLED_BIT;
     if (info.attachable) {
         switch (VideoCore::Surface::GetFormatType(format)) {
         case VideoCore::Surface::SurfaceType::ColorTexture:
             usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            if (allow_input) usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
             break;
         case VideoCore::Surface::SurfaceType::Depth:
         case VideoCore::Surface::SurfaceType::Stencil:
@@ -199,7 +201,9 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
         .arrayLayers = static_cast<u32>(info.resources.layers),
         .samples = ConvertSampleCount(info.num_samples),
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = ImageUsageFlags(format_info, info.format, allow_storage),
+        .usage = ImageUsageFlags(format_info, info.format, allow_storage,
+            device.HasNativeFramebufferFetch() && info.type == ImageType::e2D &&
+            info.num_samples == 1 && info.format == PixelFormat::A8B8G8R8_UNORM),
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices = nullptr,
@@ -2577,8 +2581,10 @@ ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::ImageViewI
     };
     has_identity_swizzle = swizzle[0] == SwizzleSource::R && swizzle[1] == SwizzleSource::G &&
                            swizzle[2] == SwizzleSource::B && swizzle[3] == SwizzleSource::A;
-    const VkImageUsageFlags requested_view_usage = ImageUsageFlags(format_info, format);
     const VkImageUsageFlags image_usage = image.UsageFlags();
+    supports_input_attachment = (image_usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) != 0;
+    const VkImageUsageFlags requested_view_usage = ImageUsageFlags(format_info, format, true,
+                                                                  supports_input_attachment);
     const VkImageUsageFlags clamped_view_usage = requested_view_usage & image_usage;
     const VkImageViewUsageCreateInfo image_view_usage{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO,
@@ -3147,6 +3153,26 @@ void Framebuffer::CreateFramebuffer(TextureCacheRuntime& runtime,
     }
 
     num_color_buffers = static_cast<u32>(num_colors);
+    if (runtime.device.HasNativeFramebufferFetch() && color_buffers[0] && num_colors == 1 &&
+        !depth_buffer && num_layers == 1 && samples == VK_SAMPLE_COUNT_1_BIT && !is_rescaled &&
+        color_buffers[0]->SupportsInputAttachment() &&
+        renderpass_key.color_formats[0] == PixelFormat::A8B8G8R8_UNORM) {
+        auto fetch_key = renderpass_key;
+        fetch_key.native_color_fetch = true;
+        try {
+            fetch_renderpass = runtime.render_pass_cache.Get(fetch_key);
+            fetch_framebuffer = runtime.device.GetLogical().CreateFramebuffer({
+                .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+                .pNext = nullptr, .flags = 0, .renderPass = fetch_renderpass,
+                .attachmentCount = 1, .pAttachments = attachments.data(),
+                .width = render_area.width, .height = render_area.height, .layers = 1,
+            });
+            fetch_color_view = attachments[0];
+        } catch (const vk::Exception& e) {
+            LOG_WARNING(Render_Vulkan, "Native framebuffer fetch unavailable: {}", e.what());
+            fetch_renderpass = VK_NULL_HANDLE;
+        }
+    }
     framebuffer = runtime.device.GetLogical().CreateFramebuffer({
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext = nullptr,

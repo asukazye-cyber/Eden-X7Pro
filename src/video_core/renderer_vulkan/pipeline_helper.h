@@ -242,7 +242,8 @@ public:
         });
     }
 
-    vk::PipelineLayout CreatePipelineLayout(VkDescriptorSetLayout descriptor_set_layout) const {
+    vk::PipelineLayout CreatePipelineLayout(VkDescriptorSetLayout descriptor_set_layout,
+                                            VkDescriptorSetLayout input_layout = VK_NULL_HANDLE) const {
         using Shader::Backend::SPIRV::RenderAreaLayout;
         using Shader::Backend::SPIRV::RescalingLayout;
         const u32 size_offset = is_compute ? sizeof(RescalingLayout::down_factor) : 0u;
@@ -253,12 +254,13 @@ public:
             .size = static_cast<u32>(sizeof(RescalingLayout)) - size_offset +
                     static_cast<u32>(sizeof(RenderAreaLayout)),
         };
+        const std::array layouts{descriptor_set_layout, input_layout};
         return device->GetLogical().CreatePipelineLayout({
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
-            .setLayoutCount = descriptor_set_layout ? 1U : 0U,
-            .pSetLayouts = bindings.empty() ? nullptr : &descriptor_set_layout,
+            .setLayoutCount = input_layout ? 2U : (descriptor_set_layout ? 1U : 0U),
+            .pSetLayouts = layouts.data(),
             .pushConstantRangeCount = 1,
             .pPushConstantRanges = &range,
         });

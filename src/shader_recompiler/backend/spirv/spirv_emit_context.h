@@ -254,6 +254,8 @@ public:
 
     Id image_buffer_type{};
     Id image_u32{};
+    Id framebuffer_input_type{};
+    Id framebuffer_input{};
 
     std::array<UniformDefinitions, Info::MAX_CBUFS> cbufs{};
     std::array<StorageDefinitions, Info::MAX_SSBOS> ssbos{};

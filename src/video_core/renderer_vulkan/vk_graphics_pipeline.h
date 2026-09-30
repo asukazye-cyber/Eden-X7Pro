@@ -84,7 +84,8 @@ public:
         DescriptorBufferRing& descriptor_buffer_ring, Common::ThreadWorker* worker_thread,
         PipelineStatistics* pipeline_statistics, RenderPassCache& render_pass_cache,
         const GraphicsPipelineCacheKey& key, std::array<vk::ShaderModule, NUM_STAGES> stages,
-        const std::array<const Shader::Info*, NUM_STAGES>& infos);
+        const std::array<const Shader::Info*, NUM_STAGES>& infos,
+        vk::ShaderModule fetch_module = {});
 
     bool HasDynamicVertexInput() const noexcept { return key.state.dynamic_vertex_input; }
     bool SupportsAlphaToCoverage() const noexcept {
@@ -106,7 +107,8 @@ public:
 
     void AddTransition(GraphicsPipeline* transition);
 
-    bool Configure(bool is_indexed) {
+    bool Configure(bool is_indexed, bool single_triangle = false) {
+        fetch_single_triangle = single_triangle;
         return configure_func(this, is_indexed);
     }
 
@@ -120,7 +122,7 @@ public:
     }
 
     [[nodiscard]] bool IsBuilt() const noexcept {
-        return is_built.load(std::memory_order::relaxed);
+        return is_built.load(std::memory_order::acquire);
     }
 
     template <typename Spec>
@@ -138,9 +140,9 @@ private:
     bool ConfigureImpl(bool is_indexed);
 
     bool ConfigureDraw(const RescalingPushConstant& rescaling,
-                       const RenderAreaPushConstant& render_are);
+                       const RenderAreaPushConstant& render_are, bool native_fetch = false);
 
-    void MakePipeline(VkRenderPass render_pass);
+    void MakePipeline(VkRenderPass render_pass, bool native_fetch = false);
 
     void Validate();
 
@@ -175,6 +177,12 @@ private:
     vk::PipelineLayout pipeline_layout;
     vk::DescriptorUpdateTemplate descriptor_update_template;
     vk::Pipeline pipeline;
+    vk::ShaderModule fetch_module;
+    vk::DescriptorSetLayout fetch_set_layout;
+    DescriptorAllocator fetch_allocator;
+    vk::Pipeline fetch_pipeline;
+    bool fetch_single_triangle{};
+    bool fetch_logged{};
 
     DescriptorBufferLayout descriptor_buffer_layout;
     std::vector<DescriptorUpdateEntry> last_descriptor_payload;

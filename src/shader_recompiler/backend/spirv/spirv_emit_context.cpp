@@ -485,6 +485,18 @@ EmitContext::EmitContext(const Profile& profile_, const RuntimeInfo& runtime_inf
     DefineImageBuffers(program.info, image_binding);
     DefineTextures(program.info, texture_binding, bindings.texture_scaling_index);
     DefineImages(program.info, image_binding, bindings.image_scaling_index);
+    if (runtime_info.native_framebuffer_fetch) {
+        AddCapability(spv::Capability::InputAttachment);
+        framebuffer_input_type = TypeImage(F32[1], spv::Dim::SubpassData, false, false, false,
+                                           2, spv::ImageFormat::Unknown);
+        framebuffer_input = AddGlobalVariable(
+            TypePointer(spv::StorageClass::UniformConstant, framebuffer_input_type),
+            spv::StorageClass::UniformConstant);
+        Decorate(framebuffer_input, spv::Decoration::DescriptorSet, 1U);
+        Decorate(framebuffer_input, spv::Decoration::Binding, 0U);
+        Decorate(framebuffer_input, spv::Decoration::InputAttachmentIndex, 0U);
+        if (profile.supported_spirv >= 0x00010400) interfaces.push_back(framebuffer_input);
+    }
     DefineAttributeMemAccess(program.info);
     DefineWriteStorageCasLoopFunction(program.info);
     DefineGlobalMemoryFunctions(program.info);

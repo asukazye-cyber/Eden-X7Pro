@@ -31,7 +31,8 @@ struct DescriptorBank {
 bool DescriptorBankInfo::IsSuperset(const DescriptorBankInfo& subset) const noexcept {
     return uniform_buffers >= subset.uniform_buffers && storage_buffers >= subset.storage_buffers &&
            texture_buffers >= subset.texture_buffers && image_buffers >= subset.image_buffers &&
-           textures >= subset.textures && images >= subset.images;
+           textures >= subset.textures && images >= subset.images &&
+           input_attachments >= subset.input_attachments;
 }
 
 template <typename Descriptors>
@@ -59,7 +60,7 @@ static DescriptorBankInfo MakeBankInfo(std::span<const Shader::Info> infos) {
 }
 
 static void AllocatePool(const Device& device, DescriptorBank& bank) {
-    std::array<VkDescriptorPoolSize, 6> pool_sizes;
+    std::array<VkDescriptorPoolSize, 7> pool_sizes;
     size_t pool_cursor{};
     const u32 sets_per_pool = device.GetSetsPerPool();
     const auto add = [&](VkDescriptorType type, u32 count) {
@@ -77,6 +78,7 @@ static void AllocatePool(const Device& device, DescriptorBank& bank) {
     add(VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, info.image_buffers);
     add(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, info.textures);
     add(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, info.images);
+    add(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, info.input_attachments);
     bank.pools.push_back(device.GetLogical().CreateDescriptorPool({
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext = nullptr,

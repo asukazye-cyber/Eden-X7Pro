@@ -136,7 +136,7 @@ RenderPassCache::RenderPassCache(const Device& device_) : device{&device_} {}
 VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
     std::scoped_lock lock{mutex};
     const auto [pair, is_new] = cache.try_emplace(key);
-    if (!is_new) {
+    if (!is_new && pair->second) {
         return *pair->second;
     }
     static constexpr size_t MAX_ATTACHMENTS =
@@ -218,10 +218,10 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
         descriptions.push_back(resolve_desc);
     }
     const VkSubpassDescription subpass{
-        .flags = 0,
+        .flags = key.native_color_fetch ? VK_SUBPASS_DESCRIPTION_RASTERIZATION_ORDER_ATTACHMENT_COLOR_ACCESS_BIT_EXT : 0U,
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .inputAttachmentCount = 0,
-        .pInputAttachments = nullptr,
+        .inputAttachmentCount = key.native_color_fetch ? 1U : 0U,
+        .pInputAttachments = key.native_color_fetch ? references.data() : nullptr,
         .colorAttachmentCount = num_attachments,
         .pColorAttachments = references.data(),
         .pResolveAttachments = do_resolve_color ? resolve_references.data() : nullptr,
@@ -238,7 +238,7 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
             .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
     };
 
@@ -275,6 +275,7 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
             resolve_references2[index] = promote(resolve_references[index]);
         }
         const VkAttachmentReference2 depth_reference2 = promote(depth_reference);
+        if (key.native_color_fetch) references2[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         const VkAttachmentReference2 depth_resolve_reference2 = promote(depth_resolve_reference);
         const ResolveModes resolve_modes = PickResolveModes(*device, key.depth_format);
         const VkSubpassDescriptionDepthStencilResolve depth_stencil_resolve{
@@ -287,11 +288,11 @@ VkRenderPass RenderPassCache::Get(const RenderPassKey& key) {
         const VkSubpassDescription2 subpass2{
             .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
             .pNext = do_resolve_depth_stencil ? &depth_stencil_resolve : nullptr,
-            .flags = 0,
+            .flags = subpass.flags,
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
             .viewMask = 0,
-            .inputAttachmentCount = 0,
-            .pInputAttachments = nullptr,
+            .inputAttachmentCount = subpass.inputAttachmentCount,
+            .pInputAttachments = key.native_color_fetch ? references2.data() : nullptr,
             .colorAttachmentCount = num_attachments,
             .pColorAttachments = references2.data(),
             .pResolveAttachments = do_resolve_color ? resolve_references2.data() : nullptr,

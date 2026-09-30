@@ -956,4 +956,6 @@
     <!-- Licenses screen strings -->
     <string name="licenses">Licenças</string>
     <string name="license_fidelityfx_fsr_description">Upscaling de alta qualidade da AMD</string>
-    </resources>
+    <string name="x7nx_native_framebuffer_fetch">Framebuffer fetch nativo Mali (experimental)</string>
+    <string name="x7nx_native_framebuffer_fetch_description">Reinicie o jogo após alterar. Exige driver Mali-G720 compatível no X7NX. Apenas leituras comprovadas do pixel local em 1×, sem MSAA e em desenhos de um triângulo são elegíveis. Os demais usam o caminho normal. Ganho de desempenho não é garantido.</string>
+</resources>

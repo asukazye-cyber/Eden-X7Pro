@@ -98,8 +98,9 @@ void Scheduler::DispatchWork() {
 }
 
 void Scheduler::BeginRenderPassImpl(const Framebuffer* framebuffer, VkRenderPass renderpass,
-                                    const VkClearValue* clear_values, u32 clear_value_count) {
-    const VkFramebuffer framebuffer_handle = framebuffer->Handle();
+                                    const VkClearValue* clear_values, u32 clear_value_count,
+                                    VkFramebuffer override_handle) {
+    const VkFramebuffer framebuffer_handle = override_handle ? override_handle : framebuffer->Handle();
     const VkExtent2D render_area = framebuffer->RenderArea();
     state.renderpass = renderpass;
     state.framebuffer = framebuffer_handle;
@@ -109,7 +110,7 @@ void Scheduler::BeginRenderPassImpl(const Framebuffer* framebuffer, VkRenderPass
     // This scheduler only requests base or CLEAR variants. Restrict reuse to single-sample
     // STORE variants: do not defer MSAA resolves or extend a DONT_CARE store to later draws.
     const bool clear_store_only = X7NX::MaliRenderTargetManager::Eligible(
-        device.X7Backend().ReuseClearRenderPasses(), renderpass != framebuffer->RenderPass(),
+        device.X7Backend().ReuseClearRenderPasses() && !override_handle, renderpass != framebuffer->RenderPass(),
         base.samples, base.resolve_color || base.resolve_depth_stencil,
         base.color_discard_mask || base.depth_stencil_discard || framebuffer->DiscardsMsaaColor() ||
             framebuffer->DiscardsMsaaDepthStencil());
@@ -246,8 +247,25 @@ void Scheduler::RequestOutsideRenderPassOperationContext() {
     EndRenderPass();
 }
 
-bool Scheduler::UpdateGraphicsPipeline(GraphicsPipeline* pipeline) {
-    if (state.graphics_pipeline == pipeline) {
+void Scheduler::RequestFramebufferFetch(const Framebuffer* framebuffer) {
+    if (state.renderpass == framebuffer->FetchRenderPass() &&
+        state.framebuffer == framebuffer->FetchHandle()) return;
+    EndRenderPass(); // Also realizes pending clears before the LOAD/input pass.
+    Record([](vk::CommandBuffer cmdbuf) {
+        const VkMemoryBarrier barrier{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER, .pNext = nullptr,
+            .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        };
+        cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, barrier, {}, {});
+    });
+    BeginRenderPassImpl(framebuffer, framebuffer->FetchRenderPass(), nullptr, 0,
+                        framebuffer->FetchHandle());
+}
+
+bool Scheduler::UpdateGraphicsPipeline(GraphicsPipeline* pipeline, bool native_fetch) {
+    if (state.graphics_pipeline == pipeline && state.native_fetch == native_fetch) {
         if (pipeline && pipeline->UsesExtendedDynamicState() &&
             state.needs_state_enable_refresh) {
             state_tracker.InvalidateStateEnableFlag();
@@ -257,6 +275,7 @@ bool Scheduler::UpdateGraphicsPipeline(GraphicsPipeline* pipeline) {
     }
 
     state.graphics_pipeline = pipeline;
+    state.native_fetch = native_fetch;
 
     if (!pipeline) {
         return true;

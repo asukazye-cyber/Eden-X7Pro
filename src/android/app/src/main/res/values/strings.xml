@@ -1877,4 +1877,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <string name="add_folders">Add Folder</string>
     <string name="percent">%1$d%%</string>
 
+    <string name="x7nx_native_framebuffer_fetch">Mali native framebuffer fetch (experimental)</string>
+    <string name="x7nx_native_framebuffer_fetch_description">Restart the game after changing. Requires a supported X7NX Mali-G720 driver. Only proven local-pixel reads at 1×, single-sample, single-triangle draws are eligible. Other draws keep the normal path. Performance is not guaranteed.</string>
 </resources>

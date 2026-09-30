@@ -83,6 +83,7 @@ struct TransformFeedbackVarying {
 };
 
 struct RuntimeInfo {
+    bool native_framebuffer_fetch{};
     std::array<AttributeType, 32> generic_input_types{};
     VaryingState previous_stage_stores;
     std::map<IR::Attribute, IR::Attribute> previous_stage_legacy_stores_mapping;

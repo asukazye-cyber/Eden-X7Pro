@@ -255,7 +255,7 @@ GraphicsPipeline::GraphicsPipeline(
     Common::ThreadWorker* worker_thread,
     PipelineStatistics* pipeline_statistics, RenderPassCache& render_pass_cache,
     const GraphicsPipelineCacheKey& key_, std::array<vk::ShaderModule, NUM_STAGES> stages,
-    const std::array<const Shader::Info*, NUM_STAGES>& infos)
+    const std::array<const Shader::Info*, NUM_STAGES>& infos, vk::ShaderModule fetch_module_)
     : key{key_}, device{device_}, texture_cache{texture_cache_}, buffer_cache{buffer_cache_},
       pipeline_cache(pipeline_cache_), scheduler{scheduler_},
       guest_descriptor_queue{guest_descriptor_queue_},
@@ -280,9 +280,37 @@ GraphicsPipeline::GraphicsPipeline(
     }
     fragment_has_color0_output = stage_infos[NUM_STAGES - 1].stores_frag_color[0];
 
+    // Single triangle eligibility is checked per draw. Exclude geometry/tessellation and every
+    // other image binding, so no unresolved texture alias can enter the native pass.
+    auto fetch_key = MakeRenderPassKey(key.state, device);
+    bool fetch_candidate = fetch_module_ && num_image_elements == 1 && num_textures == 1 &&
+        !spv_modules[1] && !spv_modules[2] && !spv_modules[3] &&
+        stage_infos[0].texture_descriptors.empty() &&
+        fetch_key.samples == VK_SAMPLE_COUNT_1_BIT &&
+        fetch_key.depth_format == PixelFormat::Invalid &&
+        fetch_key.color_formats[0] == PixelFormat::A8B8G8R8_UNORM;
+    for (size_t slot = 1; slot < fetch_key.color_formats.size(); ++slot)
+        fetch_candidate &= fetch_key.color_formats[slot] == PixelFormat::Invalid;
+    if (fetch_candidate) {
+        fetch_module = std::move(fetch_module_);
+        const VkDescriptorSetLayoutBinding input_binding{
+            .binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+            .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = nullptr,
+        };
+        fetch_set_layout = device.GetLogical().CreateDescriptorSetLayout({
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext = nullptr, .flags = 0, .bindingCount = 1, .pBindings = &input_binding,
+        });
+        DescriptorBankInfo bank;
+        bank.input_attachments = 1;
+        bank.score = 1;
+        fetch_allocator = descriptor_pool.Allocator(device, scheduler, *fetch_set_layout, bank);
+    }
+
     DescriptorLayoutBuilder builder{MakeBuilder(device, stage_infos)};
     uses_push_descriptor = builder.CanUsePushDescriptor();
-    uses_descriptor_buffer = builder.CanUseDescriptorBuffer() && descriptor_buffer_ring.IsValid();
+    uses_descriptor_buffer = !fetch_module && builder.CanUseDescriptorBuffer() && descriptor_buffer_ring.IsValid();
     descriptor_set_layout =
         builder.CreateDescriptorSetLayout(uses_push_descriptor, uses_descriptor_buffer);
     if (uses_descriptor_buffer) {
@@ -299,7 +327,7 @@ GraphicsPipeline::GraphicsPipeline(
     }
 
     const VkDescriptorSetLayout set_layout{*descriptor_set_layout};
-    pipeline_layout = builder.CreatePipelineLayout(set_layout);
+    pipeline_layout = builder.CreatePipelineLayout(set_layout, *fetch_set_layout);
     if (!uses_descriptor_buffer) {
         descriptor_update_template =
             builder.CreateTemplate(set_layout, *pipeline_layout, uses_push_descriptor);
@@ -314,6 +342,15 @@ GraphicsPipeline::GraphicsPipeline(
         Validate();
         try {
             MakePipeline(render_pass);
+            if (fetch_module) {
+                auto fetch_key = MakeRenderPassKey(key.state, device);
+                fetch_key.native_color_fetch = true;
+                try {
+                    MakePipeline(render_pass_cache.Get(fetch_key), true);
+                } catch (const vk::Exception& e) {
+                    LOG_WARNING(Render_Vulkan, "Framebuffer fetch pipeline fallback: {}", e.what());
+                }
+            }
         } catch (const vk::Exception& exception) {
             LOG_CRITICAL(Render_Vulkan, "Graphics pipeline build failed: {}", exception.what());
             std::scoped_lock lock{build_mutex};
@@ -558,11 +595,26 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
     if (IsBuilt() && !pipeline) {
         return false;
     }
-    return ConfigureDraw(rescaling, render_area);
+    const Framebuffer* framebuffer = texture_cache.GetFramebuffer();
+    bool native_fetch = false;
+    if (device.HasNativeFramebufferFetch() && fetch_single_triangle && fetch_module && IsBuilt() && fetch_pipeline &&
+        framebuffer->FetchRenderPass() && !texture_cache.IsRescaling() &&
+        Settings::values.resolution_info.up_factor == 1.0f && views.size() == 1) {
+        const auto& view = texture_cache.GetImageView(views[0].id);
+        native_fetch = view.RenderTarget() == framebuffer->FetchColorView() &&
+            view.SupportsInputAttachment() && view.HasIdentitySwizzle() &&
+            view.type == VideoCommon::ImageViewType::e2D &&
+            view.range.extent.levels == 1 && view.range.extent.layers == 1;
+    }
+    if (native_fetch && !fetch_logged) {
+        LOG_INFO(Render_Vulkan, "X7NX native framebuffer fetch ACTIVE, pipeline {:016X}", key.Hash());
+        fetch_logged = true;
+    }
+    return ConfigureDraw(rescaling, render_area, native_fetch);
 }
 
 bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
-                                     const RenderAreaPushConstant& render_area) {
+                                     const RenderAreaPushConstant& render_area, bool native_fetch) {
     const void* const descriptor_data{guest_descriptor_queue.UpdateData()};
 
     VkDeviceSize descriptor_buffer_offset{};
@@ -595,7 +647,9 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
         }
     }
 
-    scheduler.RequestRenderpass(texture_cache.GetFramebuffer());
+    const auto* framebuffer = texture_cache.GetFramebuffer();
+    if (native_fetch) scheduler.RequestFramebufferFetch(framebuffer);
+    else scheduler.RequestRenderpass(framebuffer);
     if (!is_built.load(std::memory_order::relaxed)) {
         // Wait for the pipeline to be built
         scheduler.Record([this](vk::CommandBuffer) {
@@ -605,7 +659,7 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
     }
     const bool is_rescaling{texture_cache.IsRescaling()};
     const bool update_rescaling{scheduler.UpdateRescaling(is_rescaling)};
-    const bool bind_pipeline{scheduler.UpdateGraphicsPipeline(this)};
+    const bool bind_pipeline{scheduler.UpdateGraphicsPipeline(this, native_fetch)};
     const bool bind_descriptor_buffer{
         descriptor_set_layout && uses_descriptor_buffer &&
         scheduler.UpdateDescriptorBufferChunk(descriptor_buffer_chunk)};
@@ -629,6 +683,7 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
         }
     }
     scheduler.Record([this, descriptor_data, bind_pipeline, update_descriptors,
+                      native_fetch, input_view = framebuffer->FetchColorView(),
                       descriptor_buffer_offset, descriptor_buffer_chunk, bind_descriptor_buffer,
                       rescaling_data = rescaling.Data(), is_rescaling, update_rescaling,
                       uses_render_area = render_area.uses_render_area,
@@ -642,7 +697,8 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
             if (!pipeline) {
                 return;
             }
-            cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, *pipeline);
+            cmdbuf.BindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                native_fetch ? *fetch_pipeline : *pipeline);
         }
         cmdbuf.PushConstants(*pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
                              RESCALING_LAYOUT_WORDS_OFFSET, sizeof(rescaling_data),
@@ -658,6 +714,19 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
             cmdbuf.PushConstants(*pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
                                  RENDERAREA_LAYOUT_OFFSET, sizeof(render_area_data),
                                  &render_area_data);
+        }
+        if (native_fetch) {
+            const VkDescriptorSet input_set = fetch_allocator.Commit();
+            const VkDescriptorImageInfo input{VK_NULL_HANDLE, input_view, VK_IMAGE_LAYOUT_GENERAL};
+            const VkWriteDescriptorSet write{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .pNext = nullptr,
+                .dstSet = input_set, .dstBinding = 0, .dstArrayElement = 0,
+                .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .pImageInfo = &input, .pBufferInfo = nullptr, .pTexelBufferView = nullptr,
+            };
+            device.GetLogical().UpdateDescriptorSets(write, {});
+            cmdbuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, *pipeline_layout,
+                                      1, input_set, nullptr);
         }
         if (!descriptor_set_layout) {
             return;
@@ -680,7 +749,7 @@ bool GraphicsPipeline::ConfigureDraw(const RescalingPushConstant& rescaling,
     return true;
 }
 
-void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
+void GraphicsPipeline::MakePipeline(VkRenderPass render_pass, bool native_fetch) {
     FixedPipelineState::DynamicState dynamic{};
     if (!key.state.extended_dynamic_state) {
         dynamic = key.state.dynamic_state;
@@ -943,7 +1012,7 @@ void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
     const VkPipelineColorBlendStateCreateInfo color_blend_ci{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .pNext = nullptr,
-        .flags = 0,
+        .flags = native_fetch ? VK_PIPELINE_COLOR_BLEND_STATE_CREATE_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_BIT_EXT : 0U,
         .logicOpEnable = dynamic.logic_op_enable != 0,
         .logicOp = static_cast<VkLogicOp>(dynamic.logic_op.Value()),
         .attachmentCount = static_cast<u32>(cb_attachments.size()),
@@ -1060,7 +1129,7 @@ void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
                 .pNext = nullptr,
                 .flags = 0,
                 .stage = MaxwellToVK::ShaderStage(Shader::StageFromIndex(stage)),
-                .module = *spv_modules[stage],
+                .module = native_fetch && stage == NUM_STAGES - 1 ? *fetch_module : *spv_modules[stage],
                 .pName = "main",
                 .pSpecializationInfo = nullptr,
             });
@@ -1073,7 +1142,8 @@ void GraphicsPipeline::MakePipeline(VkRenderPass render_pass) {
         flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     }
 
-    pipeline = device.GetLogical().CreateGraphicsPipeline({
+    auto& target_pipeline = native_fetch ? fetch_pipeline : pipeline;
+    target_pipeline = device.GetLogical().CreateGraphicsPipeline({
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = nullptr,
         .flags = flags,

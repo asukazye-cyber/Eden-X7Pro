@@ -21,6 +21,7 @@
 #include "core/core.h"
 #include "shader_recompiler/backend/spirv/emit_spirv.h"
 #include "shader_recompiler/environment.h"
+#include "shader_recompiler/ir_opt/framebuffer_fetch.h"
 #include "shader_recompiler/frontend/maxwell/control_flow.h"
 #include "shader_recompiler/frontend/maxwell/translate_program.h"
 #include "shader_recompiler/program_header.h"
@@ -880,6 +881,7 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
     }
     std::array<const Shader::Info*, Maxwell::MaxShaderStage> infos{};
     std::array<vk::ShaderModule, Maxwell::MaxShaderStage> modules;
+    vk::ShaderModule fetch_module;
 
     const Shader::IR::Program* previous_stage{};
     Shader::Backend::Bindings binding;
@@ -901,9 +903,22 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
 #ifdef HAS_X7NX
         X7NX::LegalizeShader(device, program);
 #endif
+        const auto initial_binding = binding;
         const std::vector<u32> code{EmitSPIRV(profile, runtime_info, program, binding)};
         device.SaveShader(code);
         modules[stage_index] = BuildShader(device, code);
+        if (device.HasNativeFramebufferFetch() &&
+            Shader::Optimization::IsLocalFramebufferFetch(program)) {
+            auto fetch_runtime = runtime_info;
+            fetch_runtime.native_framebuffer_fetch = true;
+            auto fetch_binding = initial_binding;
+            try {
+                fetch_module = BuildShader(device, EmitSPIRV(profile, fetch_runtime, program,
+                                                             fetch_binding));
+            } catch (const std::exception& e) {
+                LOG_WARNING(Render_Vulkan, "Framebuffer fetch shader fallback: {}", e.what());
+            }
+        }
 
         // Text log + .spv dump. Text log is gated by gpu_log_level != Off; .spv dump
         // is independent and gated only by gpu_log_shader_dumps.
@@ -933,7 +948,7 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
     return std::make_unique<GraphicsPipeline>(
         scheduler, buffer_cache, texture_cache, vulkan_pipeline_cache, &shader_notify, device,
         descriptor_pool, guest_descriptor_queue, descriptor_buffer_ring, thread_worker, statistics,
-        render_pass_cache, key, std::move(modules), infos);
+        render_pass_cache, key, std::move(modules), infos, std::move(fetch_module));
 
 } catch (const Shader::Exception& exception) {
     auto hash = key.Hash();

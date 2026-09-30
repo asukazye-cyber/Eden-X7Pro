@@ -222,6 +222,9 @@ public:
     [[nodiscard]] VkRenderPass RenderPass() const noexcept {
         return renderpass;
     }
+    VkRenderPass FetchRenderPass() const { return fetch_renderpass; }
+    VkFramebuffer FetchHandle() const { return *fetch_framebuffer; }
+    VkImageView FetchColorView() const { return fetch_color_view; }
 
     [[nodiscard]] const RenderPassKey& RenderPassKeyBase() const noexcept {
         return render_pass_key;
@@ -287,6 +290,9 @@ private:
     static constexpr size_t NUM_MEMOIZED_RENDER_PASS_VARIANTS = 8;
 
     vk::Framebuffer framebuffer;
+    vk::Framebuffer fetch_framebuffer;
+    VkRenderPass fetch_renderpass{};
+    VkImageView fetch_color_view{};
     VkRenderPass renderpass{};
     VkExtent2D render_area{};
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
@@ -466,6 +472,7 @@ public:
     [[nodiscard]] bool HasIdentitySwizzle() const noexcept {
         return has_identity_swizzle;
     }
+    bool SupportsInputAttachment() const { return supports_input_attachment; }
 
     [[nodiscard]] GPUVAddr GpuAddr() const noexcept {
         return gpu_addr;
@@ -503,6 +510,7 @@ private:
     u32 buffer_size = 0;
 
     VkComponentMapping swizzle_mapping{};
+    bool supports_input_attachment{};
 
     bool supports_depth_comparison = false;
     bool requires_border_color_format = false;

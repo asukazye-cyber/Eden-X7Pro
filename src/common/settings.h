@@ -672,6 +672,8 @@ struct Values {
 
     SwitchableSetting<bool> barrier_feedback_loops{linkage, true, "barrier_feedback_loops",
                                                    Category::RendererAdvanced};
+    SwitchableSetting<bool> x7nx_native_framebuffer_fetch{linkage, false,
+        "x7nx_native_framebuffer_fetch", Category::RendererAdvanced};
 
     SwitchableSetting<bool> enable_buffer_history{linkage,
                                                   false,

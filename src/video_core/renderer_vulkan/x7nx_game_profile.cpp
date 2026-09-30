@@ -30,7 +30,7 @@ std::string CacheNamespace(const Device& device) {
         return "eden-compatible";
     }
     // IR legalization and descriptor semantics changed; old SPIR-V/pipeline blobs are not reused.
-    return fmt::format("x7nx-abi3-vk{:08x}-drv{:08x}", device.ApiVersion(), device.GetDriverVersion());
+    return fmt::format("x7nx-abi5-vk{:08x}-drv{:08x}", device.ApiVersion(), device.GetDriverVersion());
 }
 
 } // namespace Vulkan::X7NX
