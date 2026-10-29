@@ -609,7 +609,7 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 
 | Cód. | Sessão e objetivo | Unidades | Q | Pré | Conclusão |
 |---|---|---|---:|---|---|
-| **S-193** | Gestão de riscos: identificação, análise e resposta<br>*Aplicar o processo de gestão de riscos a um caso de contratação pública* | **RSC-001** | 12 | S-194 | Acerte 9 de 12 e preencha uma matriz de riscos simples |
+| **S-193** | Gestão de riscos: identificação, análise e resposta<br>*Aplicar o processo de gestão de riscos a um caso de contratação pública* | **RSC-001** | 12 | S-192 | Acerte 9 de 12 e preencha uma matriz de riscos simples |
 
 ## FASE 4 — SIMULADOS E RETA FINAL
 

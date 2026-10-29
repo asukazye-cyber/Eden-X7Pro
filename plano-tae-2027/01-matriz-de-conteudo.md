@@ -539,7 +539,7 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 
 | Unidade | Conteúdo a dominar | Sessão | Pré-requisito |
 |---|---|---|---|
-| RSC-001 | Conceito de risco, identificação, análise qualitativa e quantitativa, respostas, monitoramento e matriz de riscos | S-193 | S-194 |
+| RSC-001 | Conceito de risco, identificação, análise qualitativa e quantitativa, respostas, monitoramento e matriz de riscos | S-193 | S-192 |
 
 ## MÓDULO E — REVISÕES E AVALIAÇÕES
 
