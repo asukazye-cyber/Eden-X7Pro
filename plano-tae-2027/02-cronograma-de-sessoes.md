@@ -1,6 +1,6 @@
 # PRODUTO 2 — CRONOGRAMA DE SESSÕES
 
-*200 sessões · gerado em 28/10/2026*
+*206 sessões · gerado em 28/10/2026*
 
 ## Como ler cada sessão
 
@@ -431,7 +431,7 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 
 ## FASE 3 — CONSOLIDAÇÃO (conteúdos complementares e fechamento)
 
-*53 sessões · 690 questões · de 11/03/2027 a 26/04/2027*
+*59 sessões · 760 questões · de 11/03/2027 a 02/05/2027*
 
 ### A2. Licitações e Contratos (Lei 14.133/2021) — Fases e Procedimentos
 
@@ -484,6 +484,7 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 |---|---|---|---:|---|---|
 | **S-149** | Orçamento público: princípios e instrumentos<br>*Explicar os instrumentos orçamentários e sua relação com o planejamento* | **ORC-001** | 12 | — | Acerte 9 de 12 e diferencie PPA, LDO e LOA |
 | **S-183** | Lei 4.320/1964 e ciclo orçamentário<br>*Explicar estágios da despesa e tipos de créditos adicionais* | **ORC-002** | 14 | S-149 | Acerte 11 de 14 e ordene os estágios da despesa |
+| **S-197** | Lei de Responsabilidade Fiscal (LC 101/2000)<br>*Aplicar as principais regras da LRF a situações de gestão orçamentária* | **LRF-001** | 12 | S-183 | Acerte 9 de 12 e monte o quadro dos limites |
 
 ### A1. Administração Geral e Pública — Gestão de Pessoas
 
@@ -535,6 +536,7 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 | **S-160** | Direito administrativo: fontes, princípios e organização<br>*Explicar fontes e princípios e a estrutura da Administração indireta* | **DAD-001** | 14 | — | Acerte 11 de 14 e diferencie autarquia de empresa pública |
 | **S-167** | Atos administrativos<br>*Classificar atos e analisar validade e eficácia* | **DAD-002** | 14 | S-160 | Acerte 11 de 14 e analise 4 atos |
 | **S-174** | Poderes administrativos<br>*Identificar o poder exercido e o excesso ou desvio de poder* | **DAD-003** | 14 | S-167 | Acerte 11 de 14 e classifique 6 situações |
+| **S-198** | Bens públicos<br>*Classificar bens públicos e aplicar as regras de uso e alienação* | **DAD-004** | 12 | S-174 | Acerte 9 de 12 e classifique 8 bens de uma IFES |
 
 ### C2. Raciocínio Lógico e Matemática — Estatística e Dados
 
@@ -611,18 +613,37 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 |---|---|---|---:|---|---|
 | **S-193** | Gestão de riscos: identificação, análise e resposta<br>*Aplicar o processo de gestão de riscos a um caso de contratação pública* | **RSC-001** | 12 | S-192 | Acerte 9 de 12 e preencha uma matriz de riscos simples |
 
+### D. Conteúdos Complementares (editais TAE) — Contexto da EPT
+
+| Cód. | Sessão e objetivo | Unidades | Q | Pré | Conclusão |
+|---|---|---|---:|---|---|
+| **S-194** | Educação Profissional e Tecnológica I: LDB e Decreto 5.154/2004<br>*Explicar como a educação profissional se organiza legalmente e diferenciar seus níveis e modalidades* | **EPT-001** | 12 | — | Acerte 9 de 12 e monte a linha do tempo da EPT |
+| **S-195** | Educação Profissional e Tecnológica II: Lei 11.892/2008 e os Institutos Federais<br>*Explicar a natureza e as finalidades dos Institutos Federais e sua organização* | **EPT-002** | 12 | S-194 | Acerte 9 de 12 e recite as finalidades do art. 7º |
+
+### D. Conteúdos Complementares (editais TAE) — Legislação Institucional
+
+| Cód. | Sessão e objetivo | Unidades | Q | Pré | Conclusão |
+|---|---|---|---:|---|---|
+| **S-196** | Autonomia universitária e legislação das IFES<br>*Aplicar a autonomia universitária e localizar as instâncias de decisão de uma IFES* | **UNI-001** | 12 | S-195 | Acerte 9 de 12 e desenhe a estrutura de conselhos |
+
+### D. Conteúdos Complementares (editais TAE) — Desenvolvimento de Pessoas
+
+| Cód. | Sessão e objetivo | Unidades | Q | Pré | Conclusão |
+|---|---|---|---:|---|---|
+| **S-199** | Política Nacional de Desenvolvimento de Pessoas (PNDP)<br>*Explicar como funciona o PNDP e sua relação com avaliação e desenvolvimento* | **PND-001** | 10 | S-158 | Acerte 8 de 10 e diferencie PNDP de PCCTAE |
+
 ## FASE 4 — SIMULADOS E RETA FINAL
 
-*7 sessões · 230 questões · de 27/04/2027 a 02/05/2027*
+*7 sessões · 230 questões · de 02/05/2027 a 08/05/2027*
 
 ### E. Revisões e Simulados — Revisão
 
 | Cód. | Sessão e objetivo | Unidades | Q | Pré | Conclusão |
 |---|---|---|---:|---|---|
-| **S-194** | Simulado 1: Fases 1 e 2 (específicas)<br>*Aplicar os conteúdos das fases 1 e 2 em prova cronometrada* | **REV-001** | 30 | S-179 | Acerte 60% e registre todos os erros por unidade |
-| **S-195** | Simulado 2: legislação federal<br>*Aplicar os conteúdos de legislação em prova cronometrada* | **REV-002** | 30 | S-189 | Acerte 60% e refaça os erros de lei seca |
-| **S-196** | Simulado 3: língua portuguesa e raciocínio lógico<br>*Aplicar os conteúdos de língua portuguesa e RLM em prova cronometrada* | **REV-003** | 30 | S-152 | Acerte 60% e refaça os erros de gramática |
-| **S-197** | Simulado 4: informática, redação oficial e complementares<br>*Aplicar os conteúdos gerais e complementares em prova cronometrada* | **REV-004** | 30 | S-183 | Acerte 60% e refaça os erros |
-| **S-198** | Simulado geral 1 (estilo banca do Sul)<br>*Simular prova completa com controle de tempo e estratégia de prova* | **REV-005** | 40 | S-194 | Acerte 60% no total e 70% nas específicas |
-| **S-199** | Simulado geral 2 (estilo banca do Sul)<br>*Corrigir as lacunas apontadas pelo simulado 1 e consolidar desempenho* | **REV-006** | 40 | S-198 | Acerte 70% no total e reduza em 50% os erros repetidos |
-| **S-200** | Reta final: mapas, erros e lei seca<br>*Consolidar os conteúdos com revisão ativa de alto rendimento* | **REV-007** | 30 | S-199 | Acerte 70% e conclua o mapa final de cada disciplina |
+| **S-200** | Simulado 1: Fases 1 e 2 (específicas)<br>*Aplicar os conteúdos das fases 1 e 2 em prova cronometrada* | **REV-001** | 30 | S-179 | Acerte 60% e registre todos os erros por unidade |
+| **S-201** | Simulado 2: legislação federal<br>*Aplicar os conteúdos de legislação em prova cronometrada* | **REV-002** | 30 | S-189 | Acerte 60% e refaça os erros de lei seca |
+| **S-202** | Simulado 3: língua portuguesa e raciocínio lógico<br>*Aplicar os conteúdos de língua portuguesa e RLM em prova cronometrada* | **REV-003** | 30 | S-152 | Acerte 60% e refaça os erros de gramática |
+| **S-203** | Simulado 4: informática, redação oficial e complementares<br>*Aplicar os conteúdos gerais e complementares em prova cronometrada* | **REV-004** | 30 | S-183 | Acerte 60% e refaça os erros |
+| **S-204** | Simulado geral 1 (estilo banca do Sul)<br>*Simular prova completa com controle de tempo e estratégia de prova* | **REV-005** | 40 | S-200 | Acerte 60% no total e 70% nas específicas |
+| **S-205** | Simulado geral 2 (estilo banca do Sul)<br>*Corrigir as lacunas apontadas pelo simulado 1 e consolidar desempenho* | **REV-006** | 40 | S-204 | Acerte 70% no total e reduza em 50% os erros repetidos |
+| **S-206** | Reta final: mapas, erros e lei seca<br>*Consolidar os conteúdos com revisão ativa de alto rendimento* | **REV-007** | 30 | S-205 | Acerte 70% e conclua o mapa final de cada disciplina |

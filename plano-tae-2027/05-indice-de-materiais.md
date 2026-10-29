@@ -214,12 +214,18 @@ Assim você localiza o dia pelo código da sessão (`Ctrl+F` por `S-0xx`) e não
 | S-191 | `aulas/S-191-transparencia-controle-social-e-melhoria-continua.md` | Caderno 2 | ⏳ a produzir |
 | S-192 | `aulas/S-192-gestao-de-projetos-ciclo-de-vida-e-metodologias.md` | Caderno 1 | ⏳ a produzir |
 | S-193 | `aulas/S-193-gestao-de-riscos-identificacao-analise-e-resposta.md` | Caderno 1 | ⏳ a produzir |
-| S-194 | `aulas/S-194-simulado-1-fases-1-e-2-especificas.md` | Ambos | ⏳ a produzir |
-| S-195 | `aulas/S-195-simulado-2-legislacao-federal.md` | Ambos | ⏳ a produzir |
-| S-196 | `aulas/S-196-simulado-3-lingua-portuguesa-e-raciocinio-logico.md` | Ambos | ⏳ a produzir |
-| S-197 | `aulas/S-197-simulado-4-informatica-redacao-oficial-e-complementares.md` | Ambos | ⏳ a produzir |
-| S-198 | `aulas/S-198-simulado-geral-1-estilo-banca-do-sul.md` | Ambos | ⏳ a produzir |
-| S-199 | `aulas/S-199-simulado-geral-2-estilo-banca-do-sul.md` | Ambos | ⏳ a produzir |
-| S-200 | `aulas/S-200-reta-final-mapas-erros-e-lei-seca.md` | Ambos | ⏳ a produzir |
+| S-194 | `aulas/S-194-educacao-profissional-e-tecnologica-i-ldb-e-decreto-5-154-2004.md` | Caderno 1 | ⏳ a produzir |
+| S-195 | `aulas/S-195-educacao-profissional-e-tecnologica-ii-lei-11-892-2008-e-os-institut.md` | Caderno 1 | ⏳ a produzir |
+| S-196 | `aulas/S-196-autonomia-universitaria-e-legislacao-das-ifes.md` | Caderno 1 | ⏳ a produzir |
+| S-197 | `aulas/S-197-lei-de-responsabilidade-fiscal-lc-101-2000.md` | Caderno 1 | ⏳ a produzir |
+| S-198 | `aulas/S-198-bens-publicos.md` | Caderno 1 | ⏳ a produzir |
+| S-199 | `aulas/S-199-politica-nacional-de-desenvolvimento-de-pessoas-pndp.md` | Caderno 1 | ⏳ a produzir |
+| S-200 | `aulas/S-200-simulado-1-fases-1-e-2-especificas.md` | Ambos | ⏳ a produzir |
+| S-201 | `aulas/S-201-simulado-2-legislacao-federal.md` | Ambos | ⏳ a produzir |
+| S-202 | `aulas/S-202-simulado-3-lingua-portuguesa-e-raciocinio-logico.md` | Ambos | ⏳ a produzir |
+| S-203 | `aulas/S-203-simulado-4-informatica-redacao-oficial-e-complementares.md` | Ambos | ⏳ a produzir |
+| S-204 | `aulas/S-204-simulado-geral-1-estilo-banca-do-sul.md` | Ambos | ⏳ a produzir |
+| S-205 | `aulas/S-205-simulado-geral-2-estilo-banca-do-sul.md` | Ambos | ⏳ a produzir |
+| S-206 | `aulas/S-206-reta-final-mapas-erros-e-lei-seca.md` | Ambos | ⏳ a produzir |
 
-**Produzidos: 1 de 200.** As aulas são liberadas em blocos, na ordem do calendário; peça com `GERAR MATERIAL DA PRÓXIMA SESSÃO` ou `GERAR BLOCO DE 5 SESSÕES`.
+**Produzidos: 1 de 206.** As aulas são liberadas em blocos, na ordem do calendário; peça com `GERAR MATERIAL DA PRÓXIMA SESSÃO` ou `GERAR BLOCO DE 5 SESSÕES`.

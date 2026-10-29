@@ -1,6 +1,6 @@
 # PRODUTO 3 — CALENDÁRIO EXECUTÁVEL
 
-*Início: 29/10/2026 (quinta) · previsão de término do núcleo: **02/05/2027** · gerado em 28/10/2026*
+*Início: 29/10/2026 (quinta) · previsão de término do núcleo: **08/05/2027** · gerado em 28/10/2026*
 
 ## 1. Capacidade semanal adotada
 
@@ -33,9 +33,9 @@ Total: **8 sessões novas por semana** (≈ 8 h de teoria) + 15 min de revisão 
 | 01/2027 | 34 | 804 | 94 |
 | 02/2027 | 30 | 755 | 91 |
 | 03/2027 | 34 | 908 | 104 |
-| 04/2027 | 34 | 936 | 100 |
-| 05/2027 | 3 | 352 | 50 |
-| 06/2027 | 0 | 10 | 2 |
+| 04/2027 | 34 | 864 | 100 |
+| 05/2027 | 9 | 542 | 62 |
+| 06/2027 | 0 | 40 | 8 |
 
 ## 4. Calendário dia a dia
 
@@ -244,29 +244,29 @@ Legenda: cada linha é uma noite. **Meta mínima** é o que fazer quando o dia f
 | 24/04/2027 | sábado | **S-190** · ADM · Qualidade e gestão por resultados | S-157 (D+30), S-182 (D+7), S-189 (D+1) | 25 | 25–30 min: S-190 — ler o Nível B e fazer 5 questões |
 | 25/04/2027 | domingo | **S-191** · ADM · Transparência, controle social e melhoria contínua<br>**S-192** · COM · Gestão de projetos: ciclo de vida e metodologias<br>🔁 revisão semanal + colchão de atraso | S-183 (D+7), S-184 (D+7), S-190 (D+1) | 37 | 25–30 min: S-191 — ler o Nível B e fazer 5 questões |
 | 26/04/2027 | segunda | **S-193** · COM · Gestão de riscos: identificação, análise e resposta | S-158 (D+30), S-185 (D+7), S-191 (D+1), S-192 (D+1) | 28 | 25–30 min: S-193 — ler o Nível B e fazer 5 questões |
-| 27/04/2027 | terça | **S-194** · REV · Simulado 1: Fases 1 e 2 (específicas) | S-159 (D+30), S-160 (D+30), S-186 (D+7), S-193 (D+1) | 48 | 25–30 min: S-194 — ler o Nível B e fazer 5 questões |
-| 28/04/2027 | quarta | **S-195** · REV · Simulado 2: legislação federal | S-161 (D+30), S-187 (D+7), S-194 (D+1) | 43 | 25–30 min: S-195 — ler o Nível B e fazer 5 questões |
-| 29/04/2027 | quinta | **S-196** · REV · Simulado 3: língua portuguesa e raciocínio lógico | S-162 (D+30), S-188 (D+7), S-195 (D+1) | 43 | 25–30 min: S-196 — ler o Nível B e fazer 5 questões |
-| 30/04/2027 | sexta | **S-197** · REV · Simulado 4: informática, redação oficial e complementares | S-163 (D+30), S-189 (D+7), S-196 (D+1) | 43 | 25–30 min: S-197 — ler o Nível B e fazer 5 questões |
+| 27/04/2027 | terça | **S-194** · COM · Educação Profissional e Tecnológica I: LDB e Decreto 5.154/2004 | S-159 (D+30), S-160 (D+30), S-186 (D+7), S-193 (D+1) | 30 | 25–30 min: S-194 — ler o Nível B e fazer 5 questões |
+| 28/04/2027 | quarta | **S-195** · COM · Educação Profissional e Tecnológica II: Lei 11.892/2008 e os Institutos Federais | S-161 (D+30), S-187 (D+7), S-194 (D+1) | 25 | 25–30 min: S-195 — ler o Nível B e fazer 5 questões |
+| 29/04/2027 | quinta | **S-196** · COM · Autonomia universitária e legislação das IFES | S-162 (D+30), S-188 (D+7), S-195 (D+1) | 25 | 25–30 min: S-196 — ler o Nível B e fazer 5 questões |
+| 30/04/2027 | sexta | **S-197** · COM · Lei de Responsabilidade Fiscal (LC 101/2000) | S-163 (D+30), S-189 (D+7), S-196 (D+1) | 25 | 25–30 min: S-197 — ler o Nível B e fazer 5 questões |
 
 ### 05/2027
 
 | Data | Dia | Sessão(ões) | Revisões do dia | Questões | Meta mínima |
 |---|---|---|---|---:|---|
-| 01/05/2027 | sábado | **S-198** · REV · Simulado geral 1 (estilo banca do Sul) | S-164 (D+30), S-190 (D+7), S-197 (D+1) | 53 | 25–30 min: S-198 — ler o Nível B e fazer 5 questões |
-| 02/05/2027 | domingo | **S-199** · REV · Simulado geral 2 (estilo banca do Sul)<br>**S-200** · REV · Reta final: mapas, erros e lei seca<br>🔁 revisão semanal + colchão de atraso | S-165 (D+30), S-191 (D+7), S-192 (D+7), S-198 (D+1) | 88 | 25–30 min: S-199 — ler o Nível B e fazer 5 questões |
-| 03/05/2027 | segunda | — (só revisões) | S-166 (D+30), S-193 (D+7), S-199 (D+1), S-200 (D+1) | 16 | 20 min: flashcards + caderno de erros |
-| 04/05/2027 | terça | — (só revisões) | S-167 (D+30), S-168 (D+30), S-194 (D+7) | 15 | 20 min: flashcards + caderno de erros |
-| 05/05/2027 | quarta | — (só revisões) | S-169 (D+30), S-195 (D+7) | 10 | 20 min: flashcards + caderno de erros |
-| 06/05/2027 | quinta | — (só revisões) | S-170 (D+30), S-196 (D+7) | 10 | 20 min: flashcards + caderno de erros |
-| 07/05/2027 | sexta | — (só revisões) | S-171 (D+30), S-197 (D+7) | 10 | 20 min: flashcards + caderno de erros |
-| 08/05/2027 | sábado | — (só revisões) | S-172 (D+30), S-198 (D+7) | 10 | 20 min: flashcards + caderno de erros |
-| 10/05/2027 | segunda | — (só revisões) | S-173 (D+30), S-174 (D+30), S-199 (D+7), S-200 (D+7) | 20 | 20 min: flashcards + caderno de erros |
-| 11/05/2027 | terça | — (só revisões) | S-175 (D+30), S-176 (D+30) | 10 | 20 min: flashcards + caderno de erros |
-| 12/05/2027 | quarta | — (só revisões) | S-177 (D+30) | 5 | 20 min: flashcards + caderno de erros |
-| 13/05/2027 | quinta | — (só revisões) | S-178 (D+30) | 5 | 20 min: flashcards + caderno de erros |
-| 14/05/2027 | sexta | — (só revisões) | S-179 (D+30) | 5 | 20 min: flashcards + caderno de erros |
-| 15/05/2027 | sábado | — (só revisões) | S-180 (D+30) | 5 | 20 min: flashcards + caderno de erros |
+| 01/05/2027 | sábado | **S-198** · COM · Bens públicos | S-164 (D+30), S-190 (D+7), S-197 (D+1) | 25 | 25–30 min: S-198 — ler o Nível B e fazer 5 questões |
+| 02/05/2027 | domingo | **S-199** · COM · Política Nacional de Desenvolvimento de Pessoas (PNDP)<br>**S-200** · REV · Simulado 1: Fases 1 e 2 (específicas)<br>🔁 revisão semanal + colchão de atraso | S-165 (D+30), S-191 (D+7), S-192 (D+7), S-198 (D+1) | 58 | 25–30 min: S-199 — ler o Nível B e fazer 5 questões |
+| 03/05/2027 | segunda | **S-201** · REV · Simulado 2: legislação federal | S-166 (D+30), S-193 (D+7), S-199 (D+1), S-200 (D+1) | 46 | 25–30 min: S-201 — ler o Nível B e fazer 5 questões |
+| 04/05/2027 | terça | **S-202** · REV · Simulado 3: língua portuguesa e raciocínio lógico | S-167 (D+30), S-168 (D+30), S-194 (D+7), S-201 (D+1) | 48 | 25–30 min: S-202 — ler o Nível B e fazer 5 questões |
+| 05/05/2027 | quarta | **S-203** · REV · Simulado 4: informática, redação oficial e complementares | S-169 (D+30), S-195 (D+7), S-202 (D+1) | 43 | 25–30 min: S-203 — ler o Nível B e fazer 5 questões |
+| 06/05/2027 | quinta | **S-204** · REV · Simulado geral 1 (estilo banca do Sul) | S-170 (D+30), S-196 (D+7), S-203 (D+1) | 53 | 25–30 min: S-204 — ler o Nível B e fazer 5 questões |
+| 07/05/2027 | sexta | **S-205** · REV · Simulado geral 2 (estilo banca do Sul) | S-171 (D+30), S-197 (D+7), S-204 (D+1) | 53 | 25–30 min: S-205 — ler o Nível B e fazer 5 questões |
+| 08/05/2027 | sábado | **S-206** · REV · Reta final: mapas, erros e lei seca | S-172 (D+30), S-198 (D+7), S-205 (D+1) | 43 | 25–30 min: S-206 — ler o Nível B e fazer 5 questões |
+| 10/05/2027 | segunda | — (só revisões) | S-173 (D+30), S-174 (D+30), S-199 (D+7), S-200 (D+7), S-206 (D+1) | 23 | 20 min: flashcards + caderno de erros |
+| 11/05/2027 | terça | — (só revisões) | S-175 (D+30), S-176 (D+30), S-201 (D+7), S-202 (D+7) | 20 | 20 min: flashcards + caderno de erros |
+| 12/05/2027 | quarta | — (só revisões) | S-177 (D+30), S-203 (D+7) | 10 | 20 min: flashcards + caderno de erros |
+| 13/05/2027 | quinta | — (só revisões) | S-178 (D+30), S-204 (D+7) | 10 | 20 min: flashcards + caderno de erros |
+| 14/05/2027 | sexta | — (só revisões) | S-179 (D+30), S-205 (D+7) | 10 | 20 min: flashcards + caderno de erros |
+| 15/05/2027 | sábado | — (só revisões) | S-180 (D+30), S-206 (D+7) | 10 | 20 min: flashcards + caderno de erros |
 | 17/05/2027 | segunda | — (só revisões) | S-181 (D+30), S-182 (D+30) | 10 | 20 min: flashcards + caderno de erros |
 | 18/05/2027 | terça | — (só revisões) | S-183 (D+30), S-184 (D+30) | 10 | 20 min: flashcards + caderno de erros |
 | 19/05/2027 | quarta | — (só revisões) | S-185 (D+30) | 5 | 20 min: flashcards + caderno de erros |
@@ -286,3 +286,8 @@ Legenda: cada linha é uma noite. **Meta mínima** é o que fazer quando o dia f
 | Data | Dia | Sessão(ões) | Revisões do dia | Questões | Meta mínima |
 |---|---|---|---|---:|---|
 | 01/06/2027 | terça | — (só revisões) | S-199 (D+30), S-200 (D+30) | 10 | 20 min: flashcards + caderno de erros |
+| 02/06/2027 | quarta | — (só revisões) | S-201 (D+30) | 5 | 20 min: flashcards + caderno de erros |
+| 03/06/2027 | quinta | — (só revisões) | S-202 (D+30) | 5 | 20 min: flashcards + caderno de erros |
+| 04/06/2027 | sexta | — (só revisões) | S-203 (D+30) | 5 | 20 min: flashcards + caderno de erros |
+| 05/06/2027 | sábado | — (só revisões) | S-204 (D+30) | 5 | 20 min: flashcards + caderno de erros |
+| 07/06/2027 | segunda | — (só revisões) | S-205 (D+30), S-206 (D+30) | 10 | 20 min: flashcards + caderno de erros |

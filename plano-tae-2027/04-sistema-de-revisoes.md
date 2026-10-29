@@ -4,7 +4,7 @@
 
 ## 1. Por que este sistema existe
 
-Você tem 200 sessões pela frente. Sem revisão programada, em 30 dias você terá esquecido cerca de 70% do que estudou na primeira semana — e vai descobrir isso no simulado, quando já for tarde. A revisão espaçada resolve isso com **pouco tempo diário**: 10 a 15 minutos, não capítulos inteiros.
+Você tem 206 sessões pela frente. Sem revisão programada, em 30 dias você terá esquecido cerca de 70% do que estudou na primeira semana — e vai descobrir isso no simulado, quando já for tarde. A revisão espaçada resolve isso com **pouco tempo diário**: 10 a 15 minutos, não capítulos inteiros.
 
 Três regras que governam tudo:
 1. **Recordação ativa antes da consulta.** Feche o material e escreva/fale o que lembra. Só depois confira.
@@ -105,9 +105,9 @@ Falhou em qualquer um dos três? O conteúdo volta para a fila: nova rodada em *
 
 | Momento | Sessões | Formato |
 |---|---|---|
-| Fim da Fase 1 | S-192 (a partir de 25/04/2027 no calendário) | 30 questões, 60 min |
+| Fim da Fase 3 | S-200 (a partir de 02/05/2027 no calendário) | 30 questões, 60 min |
 | Fases 2 e 3 | revisões integradas (S-135, S-140, S-144, S-148, S-152, S-179) | 20 questões, 40 min |
-| Fase 4 | S-196 e S-197 | 40 questões, 2h30, cronometrado |
+| Fase 4 | S-202 e S-203 | 40 questões, 2h30, cronometrado |
 | Modo edital | 1 por semana nas 6 semanas finais | conforme o edital |
 
 **Correção de simulado (obrigatória, 40 min):** anote acertos por disciplina, refaça as erradas **sem olhar o gabarito**, e só depois leia o comentário. Simulado sem correção é entretenimento, não estudo.

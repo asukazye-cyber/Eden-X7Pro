@@ -1,6 +1,6 @@
 # PRODUTO 1 — MATRIZ DE CONTEÚDO
 
-*Plano de Estudos 360 TAE 2027 · gerado em 28/10/2026 · 200 sessões · banco de dados: `dados/sessoes-*.psv`*
+*Plano de Estudos 360 TAE 2027 · gerado em 28/10/2026 · 206 sessões · banco de dados: `dados/sessoes-*.psv`*
 
 Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A coluna **Sessão** indica onde a unidade é estudada; a coluna **Pré-requisito** indica o que precisa estar dominado antes. Revisões: toda sessão entra automaticamente em D+1, D+7 e D+30 (ver `04-sistema-de-revisoes.md`).
 
@@ -18,9 +18,9 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 | C | C1. Língua Portuguesa | 21 | 21 | 266 | Caderno 1 |
 | C | C2. Raciocínio Lógico e Matemática | 17 | 18 | 220 | Caderno 1 |
 | C | C3. Informática | 13 | 13 | 146 | Caderno 1 |
-| D | D. Conteúdos Complementares (editais TAE) | 14 | 14 | 172 | Caderno 1 |
+| D | D. Conteúdos Complementares (editais TAE) | 20 | 20 | 242 | Caderno 1 |
 | E | E. Revisões e Simulados | 7 | 7 | 230 | Ambos |
-| — | **TOTAL** | **203** | **200** | **2538** | — |
+| — | **TOTAL** | **209** | **206** | **2608** | — |
 
 \* Redação Oficial: teoria e padrão no Caderno 1; prática de expedientes e erros no Caderno 2.
 
@@ -485,7 +485,7 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 
 ### D. Conteúdos Complementares (editais TAE)
 
-*14 sessões · 172 questões · Caderno 1*
+*20 sessões · 242 questões · Caderno 1*
 
 **Assunto: Ética e Integridade**
 
@@ -514,6 +514,7 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 |---|---|---|---|
 | ORC-001 | Princípios orçamentários, PPA, LDO e LOA e suas funções | S-149 | — |
 | ORC-002 | Receita e despesa, estágios, créditos adicionais e ciclo orçamentário | S-183 | S-149 |
+| LRF-001 | Princípios e abrangência, receita e despesa, limites, transparência, responsabilização e vedações | S-197 | S-183 |
 
 **Assunto: Direito Administrativo**
 
@@ -522,6 +523,7 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 | DAD-001 | Fontes do direito administrativo, princípios e organização da Administração Pública | S-160 | — |
 | DAD-002 | Conceito, requisitos, atributos, classificação, extinção e convalidação de atos | S-167 | S-160 |
 | DAD-003 | Poder hierárquico, disciplinar, regulamentar e de polícia e abuso de poder | S-174 | S-167 |
+| DAD-004 | Conceito, classificação, afetação e desafetação, uso por terceiros, alienação e imprescritibilidade | S-198 | S-174 |
 
 **Assunto: Atendimento**
 
@@ -541,6 +543,25 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 |---|---|---|---|
 | RSC-001 | Conceito de risco, identificação, análise qualitativa e quantitativa, respostas, monitoramento e matriz de riscos | S-193 | S-192 |
 
+**Assunto: Contexto da EPT**
+
+| Unidade | Conteúdo a dominar | Sessão | Pré-requisito |
+|---|---|---|---|
+| EPT-001 | LDB (Lei 9.394/1996) arts. 36-B a 36-D e 39 a 42; Decreto 5.154/2004; integração entre ensino e trabalho; níveis e modalidades da EPT | S-194 | — |
+| EPT-002 | Lei 11.892/2008: natureza jurídica, criação dos IFs, finalidades do art. 7º, estrutura, autonomia, oferta de vagas e organização multicampi | S-195 | S-194 |
+
+**Assunto: Legislação Institucional**
+
+| Unidade | Conteúdo a dominar | Sessão | Pré-requisito |
+|---|---|---|---|
+| UNI-001 | Art. 207 da CF; autonomia didático-científica, administrativa e de gestão financeira; estatuto, regimento e conselhos superiores | S-196 | S-195 |
+
+**Assunto: Desenvolvimento de Pessoas**
+
+| Unidade | Conteúdo a dominar | Sessão | Pré-requisito |
+|---|---|---|---|
+| PND-001 | Decreto 9.991/2019 e atualizações: PDI, levantamento de necessidades, competências e vínculo com a carreira | S-199 | S-158 |
+
 ## MÓDULO E — REVISÕES E AVALIAÇÕES
 
 ### E. Revisões e Simulados
@@ -551,10 +572,10 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 
 | Unidade | Conteúdo a dominar | Sessão | Pré-requisito |
 |---|---|---|---|
-| REV-001 | Simulado de Administração, Licitações e Arquivologia das fases 1 e 2 | S-194 | S-179 |
-| REV-002 | Simulado de Lei 8.112, Lei 9.784 e Constituição | S-195 | S-189 |
-| REV-003 | Simulado de português, interpretação e RLM | S-196 | S-152 |
-| REV-004 | Simulado de informática, redação oficial, LAI, ética e orçamento | S-197 | S-183 |
-| REV-005 | Simulado completo com 40 questões no estilo FAURGS, NC-UFPR e Coperve | S-198 | S-194 |
-| REV-006 | Segundo simulado completo com foco nos pontos fracos registrados | S-199 | S-198 |
-| REV-007 | Revisão final de mapas mentais, caderno de erros e artigos mais cobrados | S-200 | S-199 |
+| REV-001 | Simulado de Administração, Licitações e Arquivologia das fases 1 e 2 | S-200 | S-179 |
+| REV-002 | Simulado de Lei 8.112, Lei 9.784 e Constituição | S-201 | S-189 |
+| REV-003 | Simulado de português, interpretação e RLM | S-202 | S-152 |
+| REV-004 | Simulado de informática, redação oficial, LAI, ética e orçamento | S-203 | S-183 |
+| REV-005 | Simulado completo com 40 questões no estilo FAURGS, NC-UFPR e Coperve | S-204 | S-200 |
+| REV-006 | Segundo simulado completo com foco nos pontos fracos registrados | S-205 | S-204 |
+| REV-007 | Revisão final de mapas mentais, caderno de erros e artigos mais cobrados | S-206 | S-205 |

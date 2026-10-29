@@ -30,7 +30,7 @@
 | C2 — RLM e Matemática (todos os tópicos) | RLM-001 a RLM-017 | S-004 a S-177 |
 | C3 — Informática (todos os tópicos) | INF-001 a INF-015 | S-029 a S-168 |
 
-**Nenhum tópico do Núcleo Duro foi eliminado.** A matriz `01-matriz-de-conteudo.md` prova isso unidade por unidade (203 unidades).
+**Nenhum tópico do Núcleo Duro foi eliminado.** A matriz `01-matriz-de-conteudo.md` prova isso unidade por unidade (209 unidades).
 
 ## 2. O que eu acrescentei (Módulo D) e por quê
 
@@ -47,8 +47,13 @@
 | **Gestão de projetos e de riscos** | PJT-001, RSC-001 | consta em editais recentes de TAE de institutos federais (gestão de projetos, riscos e processos); o Núcleo Duro só previa processos |
 | **Estatística descritiva e análise combinatória** | RLM-016, RLM-017 | aparecem sob o rótulo "interpretação de tabelas e gráficos" e "raciocínio lógico" |
 | **Semântica, ambiguidade e vícios de linguagem** | POR-020 | cai dentro de "interpretação" e "reescrita" |
+| **Contexto da EPT** (LDB, Decreto 5.154/2004, Lei 11.892/2008) | EPT-001, EPT-002 | disciplina própria no edital do IFRS 2024 e presente em IFSC/IFPR — ver `08-base-de-editais-e-provas.md` |
+| **Autonomia universitária e legislação das IFES** | UNI-001 | caiu na UFRGS 2023 como "Legislação de Universidades e Institutos Federais" |
+| **LRF (LC 101/2000)** | LRF-001 | aparece no bloco de AFO da UFRGS e no conteúdo da UFPR |
+| **Bens públicos** | DAD-004 | tópico de Direito Administrativo na UFRGS 2025 |
+| **PNDP (Decreto 9.991/2019)** | PND-001 | consta no conteúdo programático da UFSC |
 
-Se você preferir um plano 100% aderente ao Núcleo Duro, basta ignorar S-019, S-069, S-086, S-136, S-149, S-160, S-167, S-174, S-180, S-181, S-182, S-183, S-192 e S-193 — mas eu **não recomendo**: são justamente os itens que aparecem nos editais e não estavam na sua lista.
+Se você preferir um plano 100% aderente ao Núcleo Duro, basta ignorar S-019, S-069, S-086, S-136, S-149, S-160, S-167, S-174, S-180, S-181, S-182, S-183, S-192, S-193, S-194, S-195, S-196, S-197, S-198 e S-199 — mas eu **não recomendo**: são justamente os itens que aparecem nos editais e não estavam na sua lista.
 
 ## 3. Lacunas declaradas (o que ainda não está no curso e onde será tratado)
 
@@ -57,6 +62,7 @@ Se você preferir um plano 100% aderente ao Núcleo Duro, basta ignorar S-019, S
 | **Regulamentos infralegais da Lei 14.133** (decretos federais de pregão eletrônico, SRP, contratação de TIC, margem de preferência) | média | só depois do edital: cada banca cobra o regulamento do órgão. Aula de fechamento será gerada em `MODO EDITAL` |
 | **Jurisprudência do TCU e súmulas** | média | apêndice após a Fase 3; hoje o curso ensina a *lei*, não a jurisprudência |
 | **Lei 8.112 — regulamentação do estágio probatório (Decreto 12.374/2025 e alterações de 2026)** | alta | já sinalizada em S-027 e S-112; a aula trará a regra da lei e a nota do decreto com data de verificação |
+| **Estatuto e regimento da instituição-alvo** (UFSC, UFRGS, UFPR, IFs) | alta quando exigido | S-196 ensina o gênero; o documento específico entra no MODO EDITAL |
 | **Noções de direito constitucional fora dos arts. 5º–17 e 37–41** (organização do Estado, Poderes) | baixa | não está no Núcleo Duro; entra apenas se o edital pedir |
 | **Legislação estadual/municipal e regimentos internos das IFES** | variável | entra por edital; hoje o curso não cobre |
 | **Prova discursiva / redação** | variável | a depender da banca (Coperve já cobrou redação em TAE). Se o edital trouxer, gero um bloco específico de 6 sessões |

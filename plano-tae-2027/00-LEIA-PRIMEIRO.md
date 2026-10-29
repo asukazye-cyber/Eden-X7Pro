@@ -12,8 +12,8 @@ Tudo aqui foi montado a partir do seu perfil real: ensino médio completo, traba
 
 | Produto | Arquivo | Situação |
 |---|---|---|
-| 1. Matriz de conteúdo (203 unidades com código único) | `01-matriz-de-conteudo.md` | ✅ pronto |
-| 2. Cronograma das 200 sessões (10 itens por sessão) | `02-cronograma-de-sessoes.md` | ✅ pronto |
+| 1. Matriz de conteúdo (209 unidades com código único) | `01-matriz-de-conteudo.md` | ✅ pronto |
+| 2. Cronograma das 206 sessões (10 itens por sessão) | `02-cronograma-de-sessoes.md` | ✅ pronto |
 | 3. Calendário executável com datas reais | `03-calendario-executavel.md` | ✅ pronto |
 | 4. Sistema de revisões D+1 / D+7 / D+30 | `04-sistema-de-revisoes.md` | ✅ pronto |
 | 5. Índice do material didático | `05-indice-de-materiais.md` | ✅ pronto |
@@ -22,7 +22,7 @@ Tudo aqui foi montado a partir do seu perfil real: ensino médio completo, traba
 | Lacunas, complementos e justificativas | `07-lacunas-e-complementos.md` | ✅ pronto |
 | Registro de progresso e caderno de erros | `progresso/` | ✅ modelo pronto |
 
-**As 200 aulas não são entregues de uma vez** — seriam 200 arquivos de 8 a 12 páginas. Elas saem em blocos, na ordem do calendário, e você pede com `GERAR MATERIAL DA PRÓXIMA SESSÃO` ou `GERAR BLOCO DE 5 SESSÕES`. O cronograma, o calendário e o índice já existem por inteiro: você nunca fica sem saber o que estudar, mesmo que a aula do dia ainda esteja "a produzir" (nesse caso a sessão é feita com o material base indicado em `06-biblioteca-de-fontes.md`).
+**As 206 aulas não são entregues de uma vez** — seriam 206 arquivos de 8 a 12 páginas. Elas saem em blocos, na ordem do calendário, e você pede com `GERAR MATERIAL DA PRÓXIMA SESSÃO` ou `GERAR BLOCO DE 5 SESSÕES`. O cronograma, o calendário e o índice já existem por inteiro: você nunca fica sem saber o que estudar, mesmo que a aula do dia ainda esteja "a produzir" (nesse caso a sessão é feita com o material base indicado em `06-biblioteca-de-fontes.md`).
 
 ---
 
@@ -30,17 +30,17 @@ Tudo aqui foi montado a partir do seu perfil real: ensino médio completo, traba
 
 | Indicador | Valor |
 |---|---|
-| Unidades de estudo com código único | **203** |
-| Sessões | **200** |
-| Questões previstas nas sessões | **2.538** (mais ~600 em revisões) |
-| Carga de teoria | 200 h (60 min por sessão; sessões longas de 75–90 min nos fins de semana) |
+| Unidades de estudo com código único | **209** |
+| Sessões | **206** |
+| Questões previstas nas sessões | **2.608** (mais ~600 em revisões) |
+| Carga de teoria | 206 h (60 min por sessão; sessões longas de 75–90 min nos fins de semana) |
 | Carga de revisão embutida | ~45 h |
 | Início | **29/10/2026** (quinta-feira) |
-| Término do núcleo | **02/05/2027** |
+| Término do núcleo | **08/05/2027** |
 | Ritmo | 8 sessões novas por semana |
 
-### Por que 200 sessões e não 100 ou 400
-O Núcleo Duro tem 10 disciplinas e 203 unidades de conteúdo concreto. A média ficou em **cerca de uma unidade por sessão**, com sessões de fechamento que cobrem blocos inteiros. Isso permite:
+### Por que 206 sessões e não 100 ou 400
+O Núcleo Duro tem 10 disciplinas e 209 unidades de conteúdo concreto. A média ficou em **cerca de uma unidade por sessão**, com sessões de fechamento que cobrem blocos inteiros. Isso permite:
 - sessões introdutórias de 5 a 8 questões (conceito + fixação);
 - sessões regulares de 10 a 14 questões;
 - sessões de fechamento e simulado de 20 a 40 questões.
@@ -53,8 +53,8 @@ Menos que isso obrigaria a comprimir Lei 14.133/2021 inteira em 3 aulas, o que �
 |---|---:|---:|---|---|
 | 1 — Fundamentos | 70 | 762 | 29/10/2026 a 06/01/2027 | construir base do zero em todas as disciplinas |
 | 2 — Aprofundamento | 70 | 856 | 07/01 a 10/03/2027 | lei seca, técnicas, detalhes de banca |
-| 3 — Consolidação | 53 | 690 | 11/03 a 26/04/2027 | complementares, fechamento, revisões integradas |
-| 4 — Simulados e reta final | 7 | 230 | 27/04 a 02/05/2027 | prova cronometrada e correção de lacunas |
+| 3 — Consolidação | 59 | 760 | 11/03 a 02/05/2027 | complementares, fechamento, revisões integradas |
+| 4 — Simulados e reta final | 7 | 230 | 02/05 a 08/05/2027 | prova cronometrada e correção de lacunas |
 
 ### Distribuição por disciplina
 
@@ -70,10 +70,10 @@ Menos que isso obrigaria a comprimir Lei 14.133/2021 inteira em 3 aulas, o que �
 | Língua Portuguesa | 21 | 21 | 266 |
 | Raciocínio Lógico e Matemática | 17 | 18 | 220 |
 | Informática | 13 | 13 | 146 |
-| Complementares (LAI, ética, PCCTAE, projetos, riscos, orçamento) | 14 | 14 | 172 |
+| Complementares (EPT, LAI, ética, PCCTAE, projetos, riscos, orçamento, LRF) | 20 | 20 | 242 |
 | Revisões e simulados | 7 | 7 | 230 |
 
-Específicas (Módulo A) = **88 sessões**; Legislação (B) = **39**; Gerais (C) = **52**; complementares = **14**; revisões = **7**. As específicas têm o maior peso porque, nos editais de TAE do Sul, elas costumam ser a maior fatia da prova objetiva e o critério de desempate na prática.
+Específicas (Módulo A) = **88 sessões**; Legislação (B) = **39**; Gerais (C) = **52**; complementares = **20**; revisões = **7**. As específicas têm o maior peso porque, nos editais de TAE do Sul, elas costumam ser a maior fatia da prova objetiva e o critério de desempate na prática.
 
 ---
 
@@ -101,13 +101,14 @@ Não é pouco: é o máximo sustentável para quem trabalha 8h30–17h30 e preci
 ```
 plano-tae-2027/
 ├── 00-LEIA-PRIMEIRO.md          ← você está aqui
-├── 01-matriz-de-conteudo.md     ← Produto 1: 203 unidades, códigos, pré-requisitos
-├── 02-cronograma-de-sessoes.md  ← Produto 2: as 200 sessões e seus 10 itens
+├── 01-matriz-de-conteudo.md     ← Produto 1: 209 unidades, códigos, pré-requisitos
+├── 02-cronograma-de-sessoes.md  ← Produto 2: as 206 sessões e seus 10 itens
 ├── 03-calendario-executavel.md  ← Produto 3: dia a dia com datas reais
 ├── 04-sistema-de-revisoes.md    ← Produto 4: D+1, D+7, D+30, flashcards, simulados
 ├── 05-indice-de-materiais.md    ← Produto 5: qual arquivo estudar em cada sessão
 ├── 06-biblioteca-de-fontes.md   ← leis, órgãos, videoaulas e termos de busca
 ├── 07-lacunas-e-complementos.md ← o que acrescentei ao Núcleo Duro e por quê
+├── 08-base-de-editais-e-provas.md ← evidência real: o que caiu, onde e em que proporção
 ├── dados/sessoes-*.psv          ← banco de dados do curso (a fonte de tudo)
 ├── scripts/plano.py             ← gera os produtos e registra seu progresso
 ├── aulas/                       ← material didático (Nível A, B e C por sessão)
@@ -197,7 +198,7 @@ Sessão feita pela metade conta como **parcial** — e parcial não libera a pr�
 
 ## 9. Estado atual do plano
 
-- Sessões concluídas: **0 de 200**
+- Sessões concluídas: **0 de 206**
 - Próxima sessão: **S-001 — Conceitos de Administração, organizações e eficiência** (ADM, 10 questões, 60 min)
 - Data prevista no calendário: **29/10/2026 (quinta)**
 - Revisões pendentes: nenhuma
