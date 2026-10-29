@@ -18,9 +18,9 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 | C | C1. Língua Portuguesa | 21 | 21 | 266 | Caderno 1 |
 | C | C2. Raciocínio Lógico e Matemática | 17 | 18 | 220 | Caderno 1 |
 | C | C3. Informática | 13 | 13 | 146 | Caderno 1 |
-| D | D. Conteúdos Complementares (editais TAE) | 20 | 20 | 242 | Caderno 1 |
+| D | D. Conteúdos Complementares (editais TAE) | 20 | 20 | 248 | Caderno 1 |
 | E | E. Revisões e Simulados | 7 | 7 | 230 | Ambos |
-| — | **TOTAL** | **209** | **206** | **2608** | — |
+| — | **TOTAL** | **209** | **206** | **2614** | — |
 
 \* Redação Oficial: teoria e padrão no Caderno 1; prática de expedientes e erros no Caderno 2.
 
@@ -485,7 +485,7 @@ Cada unidade de estudo tem identificador único (ADM-001, LIC-007, ...). A colun
 
 ### D. Conteúdos Complementares (editais TAE)
 
-*20 sessões · 242 questões · Caderno 1*
+*20 sessões · 248 questões · Caderno 1*
 
 **Assunto: Ética e Integridade**
 

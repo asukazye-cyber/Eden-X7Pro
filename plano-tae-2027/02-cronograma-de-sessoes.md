@@ -431,7 +431,7 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 
 ## FASE 3 — CONSOLIDAÇÃO (conteúdos complementares e fechamento)
 
-*59 sessões · 760 questões · de 11/03/2027 a 02/05/2027*
+*59 sessões · 766 questões · de 11/03/2027 a 02/05/2027*
 
 ### A2. Licitações e Contratos (Lei 14.133/2021) — Fases e Procedimentos
 
@@ -483,8 +483,8 @@ Toda sessão tem os dez itens pedidos. Para não repetir texto 200 vezes, os ite
 | Cód. | Sessão e objetivo | Unidades | Q | Pré | Conclusão |
 |---|---|---|---:|---|---|
 | **S-149** | Orçamento público: princípios e instrumentos<br>*Explicar os instrumentos orçamentários e sua relação com o planejamento* | **ORC-001** | 12 | — | Acerte 9 de 12 e diferencie PPA, LDO e LOA |
-| **S-183** | Lei 4.320/1964 e ciclo orçamentário<br>*Explicar estágios da despesa e tipos de créditos adicionais* | **ORC-002** | 14 | S-149 | Acerte 11 de 14 e ordene os estágios da despesa |
-| **S-197** | Lei de Responsabilidade Fiscal (LC 101/2000)<br>*Aplicar as principais regras da LRF a situações de gestão orçamentária* | **LRF-001** | 12 | S-183 | Acerte 9 de 12 e monte o quadro dos limites |
+| **S-183** | Lei 4.320/1964 e ciclo orçamentário<br>*Explicar estágios da despesa e tipos de créditos adicionais* | **ORC-002** | 16 | S-149 | Acerte 12 de 16 e ordene os estágios da despesa (sessão de 75 min, peso alto na UFRGS) |
+| **S-197** | Lei de Responsabilidade Fiscal (LC 101/2000)<br>*Aplicar as principais regras da LRF a situações de gestão orçamentária* | **LRF-001** | 16 | S-183 | Acerte 12 de 16 e monte o quadro dos limites (sessão de 75 min, peso alto na UFRGS) |
 
 ### A1. Administração Geral e Pública — Gestão de Pessoas
 

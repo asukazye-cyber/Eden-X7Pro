@@ -32,7 +32,7 @@ Tudo aqui foi montado a partir do seu perfil real: ensino médio completo, traba
 |---|---|
 | Unidades de estudo com código único | **209** |
 | Sessões | **206** |
-| Questões previstas nas sessões | **2.608** (mais ~600 em revisões) |
+| Questões previstas nas sessões | **2.614** (mais ~600 em revisões) |
 | Carga de teoria | 206 h (60 min por sessão; sessões longas de 75–90 min nos fins de semana) |
 | Carga de revisão embutida | ~45 h |
 | Início | **29/10/2026** (quinta-feira) |
@@ -109,6 +109,7 @@ plano-tae-2027/
 ├── 06-biblioteca-de-fontes.md   ← leis, órgãos, videoaulas e termos de busca
 ├── 07-lacunas-e-complementos.md ← o que acrescentei ao Núcleo Duro e por quê
 ├── 08-base-de-editais-e-provas.md ← evidência real: o que caiu, onde e em que proporção
+├── ancora/                      ← calibragem da banca-alvo (comece por ancora/LEIA-ANCORA.md)
 ├── dados/sessoes-*.psv          ← banco de dados do curso (a fonte de tudo)
 ├── scripts/plano.py             ← gera os produtos e registra seu progresso
 ├── aulas/                       ← material didático (Nível A, B e C por sessão)
@@ -161,6 +162,8 @@ Quando sair edital de UFRGS, UFSC, UFPR, IFRS, IFSC, IFPR ou UTFPR:
 4. **Mantenha 60% do tempo nas específicas**, mesmo que o edital traga muita coisa geral.
 5. **Nas 6 semanas finais:** 1 simulado cronometrado por semana + revisão dos erros no dia seguinte. Nada de conteúdo novo na última semana.
 6. **Ignore** o que não está no edital enquanto durar a preparação. O Núcleo Duro é a base; o edital é a lei.
+
+**Correção de rota importante (28/10/2026):** a UFRGS foi aplicada pela **FUNDATEC em 2025** e pela FAURGS em 2022/2023; o IFRS 2024 também foi FUNDATEC. Sua âncora real é **FUNDATEC**, com FAURGS como teste de densidade. Detalhes e ajustes de peso em `ancora/TABELA-DE-PESOS.md`.
 
 Não existe, nesta data (28/10/2026), edital aberto confirmado para as instituições-alvo. O que existe: histórico de bancas (FUNDATEC no IFRS, FAURGS na UFRGS, NC-UFPR na UFPR, Coperve na UFSC) e concursos TAE em andamento em outras federais em 2026 — o que mostra que a janela de 2027 é realista. Monitore os sites oficiais listados em `06-biblioteca-de-fontes.md`.
 

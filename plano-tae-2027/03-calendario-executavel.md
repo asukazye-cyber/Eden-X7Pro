@@ -33,7 +33,7 @@ Total: **8 sessões novas por semana** (≈ 8 h de teoria) + 15 min de revisão 
 | 01/2027 | 34 | 804 | 94 |
 | 02/2027 | 30 | 755 | 91 |
 | 03/2027 | 34 | 908 | 104 |
-| 04/2027 | 34 | 864 | 100 |
+| 04/2027 | 34 | 870 | 100 |
 | 05/2027 | 9 | 542 | 62 |
 | 06/2027 | 0 | 40 | 8 |
 
@@ -235,7 +235,7 @@ Legenda: cada linha é uma noite. **Meta mínima** é o que fazer quando o dia f
 | 15/04/2027 | quinta | **S-180** · COM · Desenvolvimento na carreira do PCCTAE | S-147 (D+30), S-172 (D+7), S-179 (D+1) | 23 | 25–30 min: S-180 — ler o Nível B e fazer 5 questões |
 | 16/04/2027 | sexta | **S-181** · COM · Improbidade administrativa | S-148 (D+30), S-173 (D+7), S-180 (D+1) | 27 | 25–30 min: S-181 — ler o Nível B e fazer 5 questões |
 | 17/04/2027 | sábado | **S-182** · COM · Atendimento ao público e qualidade no serviço | S-149 (D+30), S-174 (D+7), S-181 (D+1) | 23 | 25–30 min: S-182 — ler o Nível B e fazer 5 questões |
-| 18/04/2027 | domingo | **S-183** · COM · Lei 4.320/1964 e ciclo orçamentário<br>**S-184** · ADM · Modelos de Administração Pública<br>🔁 revisão semanal + colchão de atraso | S-150 (D+30), S-175 (D+7), S-176 (D+7), S-182 (D+1) | 44 | 25–30 min: S-183 — ler o Nível B e fazer 5 questões |
+| 18/04/2027 | domingo | **S-183** · COM · Lei 4.320/1964 e ciclo orçamentário<br>**S-184** · ADM · Modelos de Administração Pública<br>🔁 revisão semanal + colchão de atraso | S-150 (D+30), S-175 (D+7), S-176 (D+7), S-182 (D+1) | 46 | 25–30 min: S-183 — ler o Nível B e fazer 5 questões |
 | 19/04/2027 | segunda | **S-185** · L978 · Decisão administrativa e prazos | S-151 (D+30), S-177 (D+7), S-183 (D+1), S-184 (D+1) | 28 | 25–30 min: S-185 — ler o Nível B e fazer 5 questões |
 | 20/04/2027 | terça | **S-186** · ADM · Reformas administrativas no Brasil | S-152 (D+30), S-153 (D+30), S-178 (D+7), S-185 (D+1) | 30 | 25–30 min: S-186 — ler o Nível B e fazer 5 questões |
 | 21/04/2027 | quarta | **S-187** · L978 · Anulação, revogação e convalidação | S-154 (D+30), S-179 (D+7), S-186 (D+1) | 27 | 25–30 min: S-187 — ler o Nível B e fazer 5 questões |
@@ -247,7 +247,7 @@ Legenda: cada linha é uma noite. **Meta mínima** é o que fazer quando o dia f
 | 27/04/2027 | terça | **S-194** · COM · Educação Profissional e Tecnológica I: LDB e Decreto 5.154/2004 | S-159 (D+30), S-160 (D+30), S-186 (D+7), S-193 (D+1) | 30 | 25–30 min: S-194 — ler o Nível B e fazer 5 questões |
 | 28/04/2027 | quarta | **S-195** · COM · Educação Profissional e Tecnológica II: Lei 11.892/2008 e os Institutos Federais | S-161 (D+30), S-187 (D+7), S-194 (D+1) | 25 | 25–30 min: S-195 — ler o Nível B e fazer 5 questões |
 | 29/04/2027 | quinta | **S-196** · COM · Autonomia universitária e legislação das IFES | S-162 (D+30), S-188 (D+7), S-195 (D+1) | 25 | 25–30 min: S-196 — ler o Nível B e fazer 5 questões |
-| 30/04/2027 | sexta | **S-197** · COM · Lei de Responsabilidade Fiscal (LC 101/2000) | S-163 (D+30), S-189 (D+7), S-196 (D+1) | 25 | 25–30 min: S-197 — ler o Nível B e fazer 5 questões |
+| 30/04/2027 | sexta | **S-197** · COM · Lei de Responsabilidade Fiscal (LC 101/2000) | S-163 (D+30), S-189 (D+7), S-196 (D+1) | 29 | 25–30 min: S-197 — ler o Nível B e fazer 5 questões |
 
 ### 05/2027
 
